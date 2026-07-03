@@ -669,3 +669,133 @@ Stage Summary:
 - 入口：首页快捷入口（底部 nav 5 位已满，心情通过快捷入口进入）
 - 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
 - 待后续 Sprint：每日留言、学习统计、姐姐后台、AI 总结
+
+---
+Task ID: SPRINT-5-Foundation
+Agent: main (Z.ai Code)
+Task: Sprint 5 地基 —— 每日留言数据层/导航/API
+
+Work Log:
+- Prisma 新增 DailyNote 模型（authorRole/content/noteDate "YYYY-MM-DD"/createdAt），db push 成功
+- 新增 src/lib/note-types.ts（DailyNote + CreatorRole 共享类型）
+- API GET /api/notes?date=YYYY-MM-DD（默认今天，createdAt asc 早写的在前）+ POST /api/notes {authorRole,content,noteDate?}（校验 role/空内容/500字）
+- nav-store: NavTab 加 "notes"
+- page.tsx: activeTab==="notes" 渲染 NoteSection
+- 首页快捷入口"每日留言"激活（available=true, navTab="notes"）
+- 创建 stub src/components/notes/note-section.tsx（待子代理填充）
+- 重启 dev server 加载新 Prisma client，curl 验证 /api/notes 返回 {notes:[],date:today}
+- ESLint 0 error
+
+Stage Summary:
+- 地基就绪：每日留言数据层、API、导航激活、快捷入口激活
+- 待子代理：notes-section.tsx（留言录入 + 当日列表 + 日期切换查看往日）
+- 共享契约（供子代理）：
+  * 类型: import type { DailyNote, CreatorRole } from "@/lib/note-types"
+  * 当前身份: useUserStore(s=>s.currentUser).role => "sister"|"younger"
+  * API: GET /api/notes?date=YYYY-MM-DD -> {notes:DailyNote[], date:string}; POST /api/notes {authorRole,content,noteDate?} -> {ok,note}
+  * 玻璃卡: GlassCard; shadcn/ui 在 src/components/ui/; date-fns 已装可用
+  * 今日日期串: new Date() 本地时区拼 "YYYY-MM-DD"
+  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促，文件<500行单职责，TS严格无any
+
+---
+Task ID: 5-a
+Agent: full-stack-developer (notes UI)
+Task: 每日留言 UI（录入 + 当日列表 + 日期切换）
+
+Work Log:
+- 通读 worklog.md（Sprint 1-4 + 2-a/2-b/3-a/3-b/4-a 全程）、note-types.ts、notes API（route.ts）、user-store、GlassCard、mood-section/picker/timeline（最近一个 section 范式参考）、use-toast、button/textarea/skeleton、globals.css（leaf/leaf-soft/cream 语义色 + .font-num + .glass-strong + .glass-sheen）、page.tsx（确认 NoteSection 已接入 activeTab==="notes"）、package.json（确认 date-fns 4.1.0 已装）、agent-ctx 3-a/3-b 记录
+- 新建 src/components/notes/note-date-nav.tsx（约 90 行）：
+  * GlassCard(cream/20 底) 内三段式布局：左前一天 / 中日期展示+回到今天 / 右后一天
+  * date-fns format(d, "M月d日 EEEE", {locale:zhCN}) 渲染"7月3日 周五"；isToday 时前缀"今天 · "
+  * 前一天按钮始终可用（可回看往日留言）
+  * 回到今天按钮：isToday(currentDate) 时禁用
+  * 后一天按钮：isToday || isFuture 时禁用（不能给未来留言）
+  * 全部 ghost + rounded-full icon button，CalendarDays leaf 色图标
+- 新建 src/components/notes/note-composer.tsx（约 120 行）：
+  * GlassCard(strong + sheen + lg pad)
+  * Textarea 自适应（min-h-96px resize-y），maxLength 500，rows 3
+  * 字数计数 .font-num tabular-nums，超限标 destructive 色（防御性）
+  * "留下"按钮（Send 图标）：POST /api/notes {authorRole, content}，成功→toast"小纸条已经留下啦"+清空+onSubmitted；提交中"留着呢…"+Loader2 旋转+禁用
+  * 空内容/提交中/超限三重禁用（canSubmit）
+  * 视角化 placeholder（姐姐"想给妹妹留句话…"/妹妹"想对姐姐说什么，写下来…"）
+  * 错误取 API 返回 error 文案，兜底"网络似乎抖了一下，再试一次看看"
+- 新建 src/components/notes/note-list.tsx（约 180 行）：
+  * GET /api/notes?date=YYYY-MM-DD，cancelled-flag 模式（effect 内 async IIFE + cancelled 守卫 + finally 调 onLoaded），依赖 [refreshKey, currentDate, onLoaded]
+  * dateToStr 本地时区拼 YYYY-MM-DD
+  * 便签纸风格卡片：rounded-xl + shadow-sm + border-white/40 + 治愈浅色底（STICKY_BG 字面量 Record：sister→leaf-soft/40，younger→cream/50，Tailwind v4 内容扫描识别）
+  * 自己留的靠右（justify-end），对方留的靠左（justify-start），max-w-[85%] sm:max-w-[78%]
+  * 正文 whitespace-pre-wrap break-words + text-foreground/90（全局宋体生效）
+  * 底部作者标签（white/50 圆角小标签）+ 时间（今天视图"刚刚/X分钟前/X小时前"，往日"HH:mm"）
+  * 状态分支：error 条 / loading Skeleton×3 / empty（GlassCard cream/20 + StickyNote 圆徽章 + 视角化文案）/ normal
+  * max-h-[50vh] overflow-y-auto，framer-motion layout + opacity+y 入场（delay 阶梯 0.03s 封顶 0.2s）
+  * 空态文案：今天"还没留言，给彼此留张小纸条吧"；往日"这天没有留言"
+- 覆盖 src/components/notes/note-section.tsx（原 10 行 stub → 约 115 行）：
+  * section 容器：header（GlassCard 外）+ NoteDateNav + NoteComposer（仅 todayView 时）+ NoteList
+  * header：StickyNote(leaf) 图标 + "每日留言"标题 + 视角化副标题 + 刷新按钮（ghost + RefreshCw 旋转态）
+  * currentDate state（Date，默认 new Date()）+ refreshKey + refreshing
+  * todayView = isToday(currentDate)，决定 Composer 是否渲染 + NoteList 空态文案 + 时间显示格式
+  * 副标题：姐姐"给妹妹留句话，慢慢说，不急。"/妹妹"给姐姐留张小纸条，她打开就能看到。"
+- 校验：bun run lint → 0 error 0 warning exit 0（移除一处多余的 eslint-disable 后干净）
+- API 冒烟（curl 经 :3000）：
+  * GET /api/notes?date=2026-07-03 → 200 {notes:[], date:"2026-07-03"}
+  * POST /api/notes {younger,"冒烟测试：给姐姐留张小纸条"} → 201 {ok:true, note:{id,authorRole,content,noteDate,createdAt}}
+  * GET 复查 → 列表含新条目，createdAt asc 生效
+  * 清理：bun 直接 prisma deleteMany content LIKE "冒烟测试" → deleted 1，列表回归空
+- dev.log 复查：GET /api/notes 200、POST /api/notes 201，无编译错误
+- agent-ctx 工作记录：/home/z/my-project/agent-ctx/5-a-full-stack-developer-notes-ui.md（项目根 agent-ctx 目录可写，3-a 报告的 /agent-ctx 路径权限问题已不存在）
+
+Stage Summary:
+- 产物（4 个允许文件，全部 < 500 行，单职责）：
+  * src/components/notes/note-date-nav.tsx（约 90 行，日期切换）
+  * src/components/notes/note-composer.tsx（约 120 行，留言录入）
+  * src/components/notes/note-list.tsx（约 180 行，当日列表 + 便签纸风格 + 状态分支）
+  * src/components/notes/note-section.tsx（约 115 行，覆盖原 stub，section 容器编排）
+- 关键决策：
+  * 状态管理：useState + fetch（沿用 mood/tasks 范式，无 QueryClientProvider）
+  * effect cancelled-flag 模式满足 lint + 卸载安全
+  * 日期切换：currentDate 由 NoteSection 维护，NoteDateNav onChange → setCurrentDate → NoteList 按 currentDate 重新 fetch
+  * "今天"边界：isToday + isFuture 双重判定，后一天按钮在"今天或未来"禁用（不能给未来留言），今天按钮 isToday 时禁用，前一天始终可用
+  * 仅今天可写：NoteComposer 仅 isToday(currentDate) 时渲染（往日只读，符合"每日"语义）
+  * 提交刷新链路：NoteComposer onSubmitted → setRefreshKey(+1) → NoteList 重新 fetch；NoteSection 刷新按钮同理；NoteList onLoaded 回调关闭 section 刷新按钮态
+  * 便签纸风格：治愈浅色底（leaf-soft/40 姐姐 + cream/50 妹妹）+ rounded-xl + shadow-sm + border-white/40，字面量 class 写在 Record 里供 Tailwind v4 扫描
+  * 左右区分：自己留的 justify-end + ml-auto，对方留的 justify-start + mr-auto；max-w-[85%] sm:max-w-[78%]
+  * 时间显示：今天视图相对时间（刚刚/X分钟前/X小时前），往日视图 HH:mm
+  * a11y：aria-label 全覆盖（留言内容/留下小纸条/前一天/后一天/回到今天/刷新当日留言）
+- 文案样例（陪伴向，无催促）：
+  * 副标题："给妹妹留句话，慢慢说，不急。" / "给姐姐留张小纸条，她打开就能看到。"
+  * placeholder："想给妹妹留句话…" / "想对姐姐说什么，写下来…"
+  * 提交 toast："小纸条已经留下啦" / 提交中"留着呢…"
+  * 空态："还没留言，给彼此留张小纸条吧" / "这天没有留言"
+  * 错误："小纸条暂时打不开，稍等一下再试" / "网络似乎抖了一下，再试一次看看"
+- 工程校验：ESLint 0 error 0 warning，dev server `GET / 200`、`GET /api/notes 200`、`POST /api/notes 201`
+- ⚠️ 已知事项：
+  * 无编辑/删除留言入口（task 未要求，"留下也是一种记录"，符合慢沟通气质）
+  * 暂无实时推送（姐姐留言后妹妹需手动刷新；与 chat 不同，每日留言是慢沟通，不强求实时）
+  * 长列表 max-h-[50vh] + 全局自定义滚动条（globals.css 已就绪）
+
+---
+Task ID: SPRINT-5-Integration
+Agent: main (Z.ai Code)
+Task: Sprint 5 集成 + 端到端自检
+
+Work Log:
+- Agent Browser 端到端验证（经 Caddy:81）：
+  * 首页快捷入口"每日留言" → 进入留言板块 ✅
+  * 板块渲染：标题 + 日期切换(前一天/回到今天[今天禁用]/后一天[未来禁用]) + 录入区(textarea+留下[空禁用]) + 列表(0张) ✅
+  * 妹妹留一张纸条（带备注）→ 留下按钮启用 → 提交 → 便签出现（含内容/作者标签/时间"刚刚"）✅
+  * VLM 确认：录入区 + 1张便签 + 日期切换 + 便签纸浅色风格 + 配色合规 ✅
+  * 日期切换：前一天 → 录入区隐藏(往日只读) + 空态"没有留言" + 回到今天启用 ✅
+  * 回到今天 → 录入区恢复 + 之前的留言仍在 ✅
+  * 切姐姐视角 → 看到妹妹的纸条 → 姐姐也留一张 → 两条都显示 ✅
+  * VLM 确认：两条便签左右区分（妹妹靠左/姐姐靠右）+ 每张含内容/作者/时间 + 便签纸浅色风格 ✅
+  * API 校验：空内容→"留句话再走呀"；非法role→"不知道是谁留的" ✅
+  * 移动端 390 + 桌面端 1280 响应式 ✅
+  * 控制台无 error
+- 清理测试数据恢复干净初始态
+
+Stage Summary:
+- Sprint 5 全部交付：每日留言（慢沟通小纸条 + 日期归档 + 往日只读 + 便签纸风格左右区分）
+- 设计：区别于实时聊天的快沟通，每日留言是深思熟虑的鼓励；往日只读符合"每日"语义；便签纸浅色(leaf-soft/cream)治愈系
+- 入口：首页快捷入口（底部 nav 5 位已满）
+- 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
+- 待后续 Sprint：学习统计、姐姐后台、AI 总结

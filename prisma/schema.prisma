@@ -129,3 +129,15 @@ model MoodEntry {
   note      String?
   createdAt DateTime @default(now())
 }
+
+/// 每日留言 —— 姐姐和妹妹给彼此留的小纸条（慢沟通，区别于实时聊天）
+model DailyNote {
+  id        String   @id @default(cuid())
+  /// 留言者角色：sister 姐姐 / younger 妹妹
+  authorRole String
+  /// 留言内容
+  content   String
+  /// 归属日期 "YYYY-MM-DD"，便于按日查询
+  noteDate  String
+  createdAt DateTime @default(now())
+}

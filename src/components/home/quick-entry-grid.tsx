@@ -60,7 +60,8 @@ const ENTRIES: Entry[] = [
     description: "给彼此留一张小纸条",
     icon: "StickyNote",
     target: "notes",
-    available: false,
+    available: true,
+    navTab: "notes",
   },
   {
     key: "mood",
