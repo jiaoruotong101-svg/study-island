@@ -68,7 +68,8 @@ const ENTRIES: Entry[] = [
     description: "今天的心情颜色",
     icon: "Heart",
     target: "mood",
-    available: false,
+    available: true,
+    navTab: "mood",
   },
   {
     key: "stats",

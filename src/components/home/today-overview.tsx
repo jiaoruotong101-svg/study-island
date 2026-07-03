@@ -10,13 +10,13 @@ import type { TodayOverviewData } from "@/lib/task-types";
 /**
  * 今日概览。
  *
- * 数据来自 /api/today-overview（真实聚合）。
- * 心情卡片暂用占位（心情记录为后续 Sprint）。
+ * 数据来自 /api/today-overview（真实聚合，含今日最新心情）。
  */
 const FALLBACK: TodayOverviewData = {
   pendingTaskCount: 0,
   completedTaskCount: 0,
   focusMinutes: 0,
+  mood: null,
 };
 
 export function TodayOverview() {
@@ -64,8 +64,12 @@ export function TodayOverview() {
       key: "mood",
       icon: Smile,
       label: "当前心情",
-      value: "—",
-      hint: "即将上线",
+      value: data.mood ? `${data.mood.emoji} ${data.mood.label}` : "—",
+      hint: data.mood
+        ? role === "sister"
+          ? "妹妹今天的状态"
+          : "记下来，慢慢懂自己"
+        : "去记一笔吧",
     },
   ];
 
@@ -89,7 +93,13 @@ export function TodayOverview() {
                 </span>
                 <card.icon className="h-4 w-4 text-leaf" />
               </div>
-              <div className="font-num mt-2 text-2xl font-semibold text-foreground">
+              <div
+                className={
+                  card.key === "mood"
+                    ? "mt-2 text-xl font-semibold text-foreground sm:text-2xl"
+                    : "font-num mt-2 text-2xl font-semibold text-foreground"
+                }
+              >
                 {card.value}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">{card.hint}</div>

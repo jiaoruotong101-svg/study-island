@@ -3,6 +3,7 @@
 import { MistakeSection } from "@/components/mistakes/mistake-section";
 import { ChatSection } from "@/components/chat/chat-section";
 import { TaskSection } from "@/components/tasks/task-section";
+import { MoodSection } from "@/components/mood/mood-section";
 import { HomeSection } from "@/components/home/home-section";
 import { useNavStore } from "@/store/nav-store";
 
@@ -17,6 +18,9 @@ export default function HomePage() {
   }
   if (activeTab === "chat") {
     return <ChatSection />;
+  }
+  if (activeTab === "mood") {
+    return <MoodSection />;
   }
   return <HomeSection />;
 }

@@ -117,3 +117,15 @@ model FocusSession {
   type      String
   completedAt DateTime @default(now())
 }
+
+/// 心情记录 —— 妹妹/姐姐记录当天心情，体现陪伴而非监督
+model MoodEntry {
+  id        String   @id @default(cuid())
+  /// 记录者角色：sister / younger
+  role      String
+  /// 心情 key：calm / happy / tired / anxious / sad
+  mood      String
+  /// 可选备注
+  note      String?
+  createdAt DateTime @default(now())
+}

@@ -34,4 +34,6 @@ export interface TodayOverviewData {
   pendingTaskCount: number;
   completedTaskCount: number;
   focusMinutes: number;
+  /** 今日最新心情（无则 null） */
+  mood: { mood: string; label: string; emoji: string } | null;
 }

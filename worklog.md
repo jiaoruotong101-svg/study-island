@@ -544,3 +544,128 @@ Stage Summary:
 - 无自定义问候时回退角色默认文案（姐姐"姐姐，来看看妹妹今天"/妹妹"欢迎回到小岛"）
 - 复用 chat-service socket 通道，零新增服务
 - ESLint 0 error，dev:3000 + chat-service:3003 常驻
+
+---
+Task ID: SPRINT-4-Foundation
+Agent: main (Z.ai Code)
+Task: Sprint 4 地基 —— 心情记录数据层/导航/API/概览集成
+
+Work Log:
+- Prisma 新增 MoodEntry 模型（role/mood/note/createdAt），db push 成功
+- 新增 src/lib/mood-types.ts：MoodEntry 类型 + MOOD_OPTIONS（5 个治愈系心情：calm平静🍃/happy开心☀️/tired有点累🌙/anxious有点焦虑🌧️/sad有点难过💧，每个含 emoji/softBg/textColor/whisper陪伴语）+ getMoodOption + TodayMoodSummary
+- API:
+  * GET /api/moods?date=&role= 返回当日心情列表（createdAt desc）
+  * POST /api/moods {role,mood,note?} 校验 role/mood key，note≤200字
+  * 扩展 GET /api/today-overview 返回 mood 字段（今日最新心情摘要，无则 null）
+- task-types.ts: TodayOverviewData 加 mood 字段
+- nav-store: NavTab 加 "mood"
+- page.tsx: activeTab==="mood" 渲染 MoodSection
+- 首页快捷入口"心情记录"激活（available=true, navTab="mood"）
+- today-overview.tsx: mood 卡接真实数据（emoji+label），mood 卡不用 font-num（含 emoji 中文），FALLBACK 加 mood:null
+- 创建 stub src/components/mood/mood-section.tsx（待子代理填充）
+- 重启 dev server 加载新 Prisma client，curl 验证 /api/moods 与 /api/today-overview 正常
+- ESLint 0 error
+
+Stage Summary:
+- 地基就绪：心情数据层、2 个 API、导航激活、首页概览 mood 卡接真实数据、快捷入口激活
+- 待子代理：mood-section.tsx（心情选择器 + 备注 + 今日历史时间线）
+- 共享契约（供子代理）：
+  * 类型: import { MoodEntry, MOOD_OPTIONS, MoodOption, getMoodOption, CreatorRole } from "@/lib/mood-types"
+  * 当前身份: useUserStore(s=>s.currentUser).role => "sister"|"younger"
+  * API: GET /api/moods?date=YYYY-MM-DD -> {entries:MoodEntry[]}; POST /api/moods {role,mood,note?} -> {ok,entry}
+  * MOOD_OPTIONS: 5 项，每项 {key,label,emoji,softBg,textColor,whisper}
+  * 玻璃卡: GlassCard; shadcn/ui 在 src/components/ui/
+  * 今日日期串: new Date() 本地时区拼 "YYYY-MM-DD"
+  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促，文件<500行单职责，TS严格无any
+
+---
+Task ID: 4-a
+Agent: full-stack-developer (mood UI)
+Task: 心情记录 UI（选择器 + 备注 + 今日时间线）
+
+Work Log:
+- 通读 worklog.md（Sprint 1/2/3 + 2-a/2-b/2.1/2.2）、mood-types.ts、mood API route、glass-card、mistake-section（参考 section 容器范式）、today-overview（确认首页心情卡消费 /api/today-overview，与本模块解耦）、user-store、use-toast、button/textarea，确认共享契约与设计铁律
+- 覆盖 src/components/mood/mood-picker.tsx：
+  * GlassCard(strong + sheen) 内 5 列网格心情选项（grid-cols-5），每项 emoji + label，role=radiogroup/radio + aria-checked
+  * 选中高亮用 MOOD_OPTIONS 的 softBg + textColor（leaf-soft/amber-50/stone-100/slate-100/sky-50 治愈浅色，非蓝紫色块）；未选为玻璃白底 muted
+  * AnimatePresence + motion height auto 展开 whisper 陪伴语（softBg 底）+ 备注 Textarea（maxLength 200，视角化 placeholder）+ 字数计数（.font-num）+ "记下来"按钮
+  * 提交：POST /api/moods { role, mood, note? }，成功 → toast"记下来啦" + 清空 selectedKey/note + onRecorded() 回调；提交中 Loader2 旋转 + 禁用
+  * 视角化：heading 妹妹"选一个今天的心情"/姐姐"你也记一笔吧"；placeholder 妹妹"想说点什么就写下来…"/姐姐"想给妹妹留句话也可以…"
+  * 错误：取 API 返回的 error 文案（"选一个心情吧"/"不知道是谁的心情"），兜底"网络似乎抖了一下，再试一次看看"
+- 新建 src/components/mood/mood-timeline.tsx：
+  * GET /api/moods?date=today，cancelled-flag 模式（effect 内 async IIFE + cancelled 守卫，finally 里 if(!cancelled) setState + onLoaded）
+  * refreshKey 变化触发重新拉取；onLoaded 回调供父级关闭刷新按钮态
+  * 列表 GlassCard(pad=none) 内 ul + max-h-[40vh] overflow-y-auto + divide-y，每条 emoji 圆徽章 + label(textColor) + 记录者标签(姐姐/妹妹) + 相对时间(刚刚/X分钟前，.font-num) + 备注(whitespace-pre-wrap)
+  * 加载态：3 个 Skeleton h-16；空态：🌿 圆徽章 + 视角化文案（妹妹"今天还没记心情，选一个吧"/姐姐"妹妹还没记心情，也许今天她很平静"）；错误态：destructive/30 边框条
+  * 防御：getMoodOption 未命中时 fallback 🍃 + 原始 key + muted 文字色
+  * framer-motion 列表项 opacity+y 入场，delay 阶梯 0.03s 封顶 0.2s
+  * 标题"今日心情 N 条"，N 用 .font-num tabular-nums
+- 覆盖 src/components/mood/mood-section.tsx（原 stub）：
+  * section 容器：header(GlassCard 外) + MoodPicker + MoodTimeline
+  * header：Heart(leaf) 图标 + "心情记录"标题 + 视角化副标题（妹妹"今天感觉怎么样？记下来，慢慢懂自己。"/姐姐"看看妹妹今天的心情，不强求，她愿意说就说。"）+ 刷新按钮(ghost，RefreshCw 旋转态)
+  * refreshKey state：MoodPicker onRecorded → +1；刷新按钮 → +1 + setRefreshing(true)；MoodTimeline onLoaded → setRefreshing(false)
+  * role 从 useUserStore 取，as CreatorRole
+- 校验：bun run lint 通过（0 error 0 warning，exit 0）
+- 端到端冒烟（curl，经 :3000）：
+  * GET /api/moods?date=2026-07-03 → 200 { entries: [] }
+  * POST /api/moods {younger, calm, "冒烟测试一下"} → 201 { ok:true, entry:{...} }
+  * GET 复查 → 200，新条目在列表首位（createdAt desc 生效）
+  * POST 非法 mood "unknown" → 400 { ok:false, error:"选一个心情吧" }
+  * POST 非法 role "mom" → 400 { ok:false, error:"不知道是谁的心情" }
+  * 清理测试数据：db.moodEntry.deleteMany({})，remaining: 0
+- dev.log 复查：MoodEntry Prisma query 正常执行（today-overview 触发），无编译错误
+
+Stage Summary:
+- 产物（3 个文件，严格遵守 task 范围）：
+  * src/components/mood/mood-picker.tsx（心情选择器 + 备注 + 提交，约 200 行）
+  * src/components/mood/mood-timeline.tsx（今日时间线 + 空态/加载/错误，约 180 行）
+  * src/components/mood/mood-section.tsx（section 容器，覆盖原 stub，约 85 行）
+- 关键决策：
+  * 状态管理：useState + fetch（项目未配 QueryClientProvider，遵循"先用简单的 useState + fetch"）；effect 用 cancelled-flag 模式满足 lint 与卸载安全
+  * 通信：MoodSection 维护 refreshKey，picker 提交成功 / 点刷新 → +1 → timeline refetch；timeline onLoaded 回调关闭 section 刷新按钮态（避免无回调的 setTimeout 黑魔法）
+  * 心情高亮：直接用 MOOD_OPTIONS 的 softBg + textColor（已是治愈浅色，不算违规色块）；未选为 bg-background/40 玻璃白
+  * Tailwind v4 自动内容检测：MOOD_OPTIONS 的字面量 class（bg-leaf-soft/50 等）在 src/lib/mood-types.ts 中以字符串字面量出现，会被扫描器识别，无需 safelist
+  * 视角化覆盖：heading / placeholder / 副标题 / 空态文案 全部按 sister/younger 分支，姐姐也能记自己的心情（主用途仍是妹妹记录、姐姐查看）
+  * a11y：radiogroup/radio + aria-checked；aria-label；sr-only 不需要（无 Dialog）；focus-visible:ring
+  * 单职责：picker 只管选+提交，timeline 只管展示+拉取，section 只管编排 + refreshKey
+- 已知事项：
+  * 首页"当前心情"卡（today-overview）与本模块解耦：用户在 mood section 记录后切回首页，HomeSection 重新 mount 会重新 fetch /api/today-overview，自动反映最新心情（task spec 允许的简单方案，未做跨 section 实时通信）
+  * 时间线仅展示今日（date=today）；跨日查看不在本 task 范围
+  * 无删除/编辑心情入口（task 未要求，记录即陪伴，删掉反而不符合"留下也是一种记录"的气质）
+- 文案样例（陪伴向，无催促）：
+  * 副标题："今天感觉怎么样？记下来，慢慢懂自己。" / "看看妹妹今天的心情，不强求，她愿意说就说。"
+  * heading："选一个今天的心情" / "你也记一笔吧"
+  * placeholder："想说点什么就写下来…" / "想给妹妹留句话也可以…"
+  * whisper（直接复用 MOOD_OPTIONS）："稳稳的，这样就很棒。" / "今天有好事呢，姐姐也替你开心。" / "累了就歇会儿，岛上的风很温柔。" / "不安也没关系，慢慢深呼吸。" / "难过的时候，姐姐一直都在。"
+  * 空态："今天还没记心情，选一个吧" / "妹妹还没记心情，也许今天她很平静"
+  * 提交："记下来啦" / 提交中"记着呢…"
+  * 错误："心情暂时打不开，稍等一下再试" / "网络似乎抖了一下，再试一次看看"
+
+---
+Task ID: SPRINT-4-Integration
+Agent: main (Z.ai Code)
+Task: Sprint 4 集成 + 端到端自检 + 概览 mood 卡接真实数据
+
+Work Log:
+- 今日概览 mood 卡接真实数据：/api/today-overview 返回今日最新心情摘要，today-overview.tsx 显示 "emoji + label"，mood 卡不用 font-num（含 emoji 中文）
+- 首页快捷入口"心情记录"激活，点击切到 mood section
+- Agent Browser 端到端验证（经 Caddy:81）：
+  * 首页快捷入口"心情记录" → 进入心情板块 ✅
+  * 5 个心情选项渲染（平静🍃/开心☀️/有点累🌙/有点焦虑🌧️/有点难过💧，radio 形式）✅
+  * 选"开心" → 展开 whisper 陪伴语"今天有好事呢" + 备注 textbox + "记下来"按钮 ✅
+  * 填备注 + 提交 → toast"记下来啦" + 时间线出现 1 条 + 选择清空 ✅
+  * 时间线含 emoji/label/记录者标签/相对时间/备注 ✅
+  * 切回首页 → 概览 mood 卡显示"☀️ 开心" + 提示 ✅
+  * 再记一条"有点累" → 时间线 2 条，最新在前 ✅
+  * VLM 确认视觉：5 选项带 emoji、时间线最新在前、每条含 emoji/标签/时间/备注、配色奶白浅绿无蓝紫 ✅
+  * API 校验：非法 mood → "选一个心情吧"；非法 role → "不知道是谁的心情" ✅
+  * 移动端 390 + 桌面端 1280 响应式 ✅
+  * 控制台无 error
+- 清理测试数据恢复干净初始态
+
+Stage Summary:
+- Sprint 4 全部交付：心情记录（5 治愈系心情 + 备注 + 今日时间线）+ 首页概览 mood 卡接真实数据 + 快捷入口激活
+- 设计：心情选项用"有点累/有点焦虑/有点难过"软化负面标签；whisper 陪伴语；记录者标签让姐姐能看到妹妹心情（陪伴而非监督）
+- 入口：首页快捷入口（底部 nav 5 位已满，心情通过快捷入口进入）
+- 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
+- 待后续 Sprint：每日留言、学习统计、姐姐后台、AI 总结
