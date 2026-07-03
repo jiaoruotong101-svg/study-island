@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ListChecks, Timer, Smile } from "lucide-react";
 import type { TodayOverview } from "@/lib/types";
 import { useUserStore } from "@/store/user-store";
+import { GlassCard } from "@/components/ui/glass-card";
 
 /**
  * 今日概览。
@@ -65,18 +66,19 @@ export function TodayOverview() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.06, duration: 0.35 }}
-            className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                {card.label}
-              </span>
-              <card.icon className="h-4 w-4 text-leaf" />
-            </div>
-            <div className="mt-2 text-2xl font-semibold text-foreground">
-              {card.value}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">{card.hint}</div>
+            <GlassCard pad="sm" className="h-full">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  {card.label}
+                </span>
+                <card.icon className="h-4 w-4 text-leaf" />
+              </div>
+              <div className="font-num mt-2 text-2xl font-semibold text-foreground">
+                {card.value}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">{card.hint}</div>
+            </GlassCard>
           </motion.div>
         ))}
       </div>

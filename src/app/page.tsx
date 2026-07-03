@@ -5,14 +5,28 @@ import { RoleSwitcher } from "@/components/home/role-switcher";
 import { TodayOverview } from "@/components/home/today-overview";
 import { CompanionQuote } from "@/components/home/companion-quote";
 import { QuickEntryGrid } from "@/components/home/quick-entry-grid";
+import { MistakeSection } from "@/components/mistakes/mistake-section";
+import { ChatSection } from "@/components/chat/chat-section";
 import { useUserStore } from "@/store/user-store";
+import { useNavStore } from "@/store/nav-store";
 
 export default function HomePage() {
+  const activeTab = useNavStore((s) => s.activeTab);
+
+  if (activeTab === "mistakes") {
+    return <MistakeSection />;
+  }
+  if (activeTab === "chat") {
+    return <ChatSection />;
+  }
+  return <HomeSection />;
+}
+
+function HomeSection() {
   const role = useUserStore((s) => s.currentUser.role);
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* 顶部欢迎语 —— 根据当前身份微调文案 */}
       <motion.section
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
@@ -37,7 +51,6 @@ export default function HomePage() {
 
       <QuickEntryGrid />
 
-      {/* 页脚留白，避免被底部 nav 遮挡 */}
       <div className="h-2" aria-hidden />
     </div>
   );

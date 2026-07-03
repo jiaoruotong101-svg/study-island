@@ -129,12 +129,24 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* 宋体（中文）+ Times New Roman（数字/英文）。
+       浏览器对每个字符按序匹配：Times New Roman 无 CJK 字形，
+       故中文自动回退到宋体；Linux/Android 无本地宋体时回退到 Noto Serif SC。 */
+    font-family: "Times New Roman", var(--font-tinos), "Songti SC", "STSong", "SimSun", "宋体", var(--font-noto-serif-sc), serif;
+  }
   body {
     @apply bg-background text-foreground;
+    font-family: inherit;
     /* 柔和字体渲染 */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "ss01", "cv01";
+  }
+  /* 数字与英文显式锁定 Times New Roman，确保不被宋体覆盖 */
+  .font-num {
+    font-family: "Times New Roman", var(--font-tinos), "Times", serif;
+    font-variant-numeric: lining-nums;
   }
   /* 自定义滚动条 —— 治愈风格 */
   ::-webkit-scrollbar {
@@ -151,4 +163,75 @@
   ::-webkit-scrollbar-thumb:hover {
     background: oklch(0.75 0.04 145);
   }
+}
+
+/* ===== 玻璃质感（liquid-glass 风格） =====
+   参考 rdev/liquid-glass-react：磨砂 + 半透明 + 高光边 + 内阴影。
+   色系保持奶白/浅绿，仅通过透明度与高光营造玻璃质地。 */
+.glass {
+  background: oklch(0.99 0.005 95 / 0.55);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid oklch(1 0 0 / 0.5);
+  box-shadow:
+    0 4px 24px -8px oklch(0.4 0.04 140 / 0.12),
+    inset 0 1px 0 0 oklch(1 0 0 / 0.7),
+    inset 0 -1px 0 0 oklch(0.62 0.09 150 / 0.06);
+}
+.dark .glass {
+  background: oklch(0.24 0.015 150 / 0.5);
+  border: 1px solid oklch(1 0 0 / 0.1);
+  box-shadow:
+    0 4px 24px -8px oklch(0 0 0 / 0.4),
+    inset 0 1px 0 0 oklch(1 0 0 / 0.1),
+    inset 0 -1px 0 0 oklch(0.7 0.1 150 / 0.08);
+}
+/* 更强玻璃：用于浮层/顶部栏 */
+.glass-strong {
+  background: oklch(0.99 0.005 95 / 0.75);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid oklch(1 0 0 / 0.6);
+  box-shadow:
+    0 6px 30px -10px oklch(0.4 0.04 140 / 0.16),
+    inset 0 1px 0 0 oklch(1 0 0 / 0.8);
+}
+.dark .glass-strong {
+  background: oklch(0.24 0.015 150 / 0.7);
+  border: 1px solid oklch(1 0 0 / 0.14);
+  box-shadow:
+    0 6px 30px -10px oklch(0 0 0 / 0.5),
+    inset 0 1px 0 0 oklch(1 0 0 / 0.12);
+}
+/* 玻璃上的高光斜线（liquid 感），用伪元素点缀，不引入色块 */
+.glass-sheen {
+  position: relative;
+  isolation: isolate;
+}
+.glass-sheen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    oklch(1 0 0 / 0.35) 0%,
+    oklch(1 0 0 / 0) 35%,
+    oklch(1 0 0 / 0) 65%,
+    oklch(1 0 0 / 0.12) 100%
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.7;
+  z-index: 1;
+}
+.dark .glass-sheen::before {
+  background: linear-gradient(
+    135deg,
+    oklch(1 0 0 / 0.14) 0%,
+    oklch(1 0 0 / 0) 35%,
+    oklch(1 0 0 / 0) 65%,
+    oklch(1 0 0 / 0.05) 100%
+  );
+  opacity: 0.8;
 }

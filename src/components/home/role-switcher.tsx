@@ -5,6 +5,7 @@ import { Users } from "lucide-react";
 import { useUserStore } from "@/store/user-store";
 import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { GlassCard } from "@/components/ui/glass-card";
 
 /**
  * 身份切换器。
@@ -23,10 +24,8 @@ export function RoleSwitcher() {
   const switchRole = useUserStore((s) => s.switchRole);
 
   return (
-    <section
-      aria-label="身份切换"
-      className="rounded-2xl border border-border/70 bg-card p-5 sm:p-6"
-    >
+    <section aria-label="身份切换">
+     <GlassCard pad="md">
       <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
         <Users className="h-4 w-4" />
         <span>现在是</span>
@@ -76,6 +75,7 @@ export function RoleSwitcher() {
       <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
         · 这是一个只属于你们两个人的小岛，可以随时切换视角看看彼此
       </p>
+     </GlassCard>
     </section>
   );
 }

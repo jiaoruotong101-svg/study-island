@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -29,4 +26,40 @@ model Post {
   authorId  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// 错题记录 —— 妹妹拍下做错的题，姐姐可以看到并留言鼓励
+model MistakeRecord {
+  id        String   @id @default(cuid())
+  /// 记录类型：image 图片 / voice 语音
+  type      String
+  /// 文件相对路径，通过 /api/files/<filename> 访问
+  filePath  String
+  /// 文件 mime，便于前端渲染
+  mimeType  String
+  /// 录音时长（秒），仅 type=voice 时有意义
+  duration  Int?
+  /// 妹妹写的备注（哪一科、错因）
+  note      String?
+  /// 科目标签，便于后续筛选
+  subject   String?
+  /// 创建者角色：sister 姐姐 / younger 妹妹
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+/// 实时聊天消息 —— 姐姐和妹妹之间的陪伴对话
+model ChatMessage {
+  id        String   @id @default(cuid())
+  /// 发送者角色：sister / younger
+  senderRole String
+  /// 消息类型：text 文字 / voice 语音
+  type      String
+  /// 文本内容（type=text）；语音消息时为空
+  content   String?
+  /// 语音文件相对路径（type=voice）
+  filePath  String?
+  /// 语音时长（秒）
+  duration  Int?
+  createdAt DateTime @default(now())
 }

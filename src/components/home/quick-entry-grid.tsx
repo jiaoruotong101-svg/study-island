@@ -103,9 +103,9 @@ export function QuickEntryGrid() {
               type="button"
               disabled={!entry.available}
               className={cn(
-                "group flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left transition-all",
+                "group flex flex-col gap-3 rounded-2xl p-4 text-left transition-all glass",
                 entry.available
-                  ? "hover:-translate-y-0.5 hover:border-leaf/40 hover:shadow-sm"
+                  ? "hover:-translate-y-0.5 hover:border-leaf/40"
                   : "cursor-not-allowed opacity-70",
               )}
             >

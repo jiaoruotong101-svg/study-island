@@ -1,18 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Tinos, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/layout/app-shell";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/* 字体：宋体（中文）+ Times New Roman（数字/英文）。
+   - Tinos：Times New Roman 的度量兼容开源替代（Linux/Android 无 Times 时回退）
+   - Noto Serif SC：宋体风格的中文衬线（Linux/Android 无 SimSun 时回退）
+   - 在 Mac/Windows 上，CSS 字体栈会优先使用本地 Times New Roman 与 Songti SC/SimSun。 */
+const tinos = Tinos({
+  variable: "--font-tinos",
   subsets: ["latin"],
+  weight: ["400", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const notoSerifSC = Noto_Serif_SC({
+  variable: "--font-noto-serif-sc",
   subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -46,10 +55,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
-      >
+    <html
+      lang="zh-CN"
+      suppressHydrationWarning
+      className={`${tinos.variable} ${notoSerifSC.variable}`}
+    >
+      <body className="antialiased bg-background text-foreground">
+        {/* 背景柔色斑 —— 让玻璃质感的磨砂有内容可透，不引入色块渐变到内容区 */}
+        <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+          <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-leaf/10 blur-3xl" />
+          <div className="absolute -right-32 top-1/3 h-80 w-80 rounded-full bg-cream/60 blur-3xl" />
+          <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-leaf/8 blur-3xl" />
+        </div>
         <ThemeProvider>
           <AppShell>{children}</AppShell>
           <Toaster />
