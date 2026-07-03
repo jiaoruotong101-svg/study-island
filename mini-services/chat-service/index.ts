@@ -57,6 +57,14 @@ io.on("connection", (socket: Socket) => {
     io.emit("quote:updated", payload);
   });
 
+  /**
+   * 首页顶部问候更新：主应用 PUT /api/greeting 持久化后 emit('greeting:update', record)，
+   * 本服务原样广播 greeting:updated，所有首页实时刷新。
+   */
+  socket.on("greeting:update", (payload: unknown) => {
+    io.emit("greeting:updated", payload);
+  });
+
   socket.on("disconnect", (reason: string) => {
     connectionCount = Math.max(0, connectionCount - 1);
     console.log(

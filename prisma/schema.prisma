@@ -74,6 +74,17 @@ model HomeQuote {
   updatedAt  DateTime @updatedAt
 }
 
+/// 首页顶部问候（大标题 + 副标题）—— 姐姐视角下可自由编辑，两人共享
+/// 单例：固定 id = "island-greeting"，upsert 更新
+model HomeGreeting {
+  id         String   @id /// 固定 "island-greeting"
+  heading    String
+  subtitle   String
+  /// 作者角色：sister 姐姐 / younger 妹妹（当前仅姐姐视角可编辑）
+  authorRole String
+  updatedAt  DateTime @updatedAt
+}
+
 /// 今日任务 —— 姐姐和妹妹都可创建，体现"自主规划"而非"被派活"
 model Task {
   id           String   @id @default(cuid())

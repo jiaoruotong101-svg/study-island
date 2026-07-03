@@ -509,3 +509,38 @@ Stage Summary:
 - 设计：idle 改动立即生效；运行中改动不影响当前段（下一段生效），避免计时混乱
 - 配套：校验（范围+长休≥短休）、恢复默认、齿轮入口集成到番茄钟顶部
 - ESLint 0 error，dev:3000 + chat-service:3003 常驻
+
+---
+Task ID: SPRINT-3.2
+Agent: main (Z.ai Code)
+Task: 首页顶部问候（大标题+副标题）姐姐视角可自由编辑，实时共享
+
+Work Log:
+- Prisma 新增 HomeGreeting 单例模型（id="island-greeting"，heading/subtitle/authorRole/updatedAt），db push
+- 新增 src/lib/greeting-types.ts（HomeGreeting 共享类型）
+- API GET/PUT /api/greeting（upsert 单例；空标题/超60字/超120字/非法 role 校验）
+- chat-service 加 greeting:update → greeting:updated 中继事件（bun --hot 自动重启）
+- chat-socket.ts 契约注释补充 greeting 事件
+- 新建 src/components/home/greeting-editor.tsx：铅笔按钮（仅 role==="sister" 渲染）+ Dialog（标题 Input 60字 + 副标题 Textarea 120字 + 校验 + 保存调 PUT）；key={open} 重挂载避免 effect setState
+- 抽取 src/components/home/home-section.tsx（从 page.tsx 分离 HomeSection）：挂载拉取 greeting（IIFE+cancelled flag 避免 lint）；socket 监听 greeting:updated 实时刷新；无问候回退角色默认文案；显示"姐姐留/妹妹留"标签；GreetingEditor 仅姐姐渲染
+- page.tsx 简化为纯路由
+- Agent Browser 双会话端到端验证：
+  * 妹妹视角：无编辑按钮、显示默认"欢迎回到小岛" ✅
+  * 姐姐视角：编辑按钮出现、显示默认"姐姐，来看看妹妹今天" ✅
+  * 姐姐编辑标题+副标题保存 → 更新 + "姐姐留"标签 ✅
+  * 切回妹妹视角 → 妹妹也看到姐姐写的问候（共享）+ 无编辑按钮 ✅
+  * 双会话实时：姐姐会话B编辑保存 → 妹妹会话A不刷新即时收到新标题 ✅
+  * 副标题实时同步 ✅
+  * 刷新后持久化（数据库）✅
+  * 空标题前端+API双重校验"标题留几个字吧" ✅
+  * VLM 确认视觉：标题/副标题/姐姐留标签/铅笔按钮/语录卡片/玻璃质感 ✅
+  * 控制台无 error
+- 清理测试数据恢复默认初始态
+
+Stage Summary:
+- 首页顶部这块所有文字（大标题+副标题+语录）现在姐姐视角都可自由编辑：
+  * 大标题+副标题：仅姐姐可编辑（GreetingEditor 角色判断），两人共享，实时同步，持久化
+  * 语录：姐姐妹妹都可编辑（Sprint 2.1 已实现）
+- 无自定义问候时回退角色默认文案（姐姐"姐姐，来看看妹妹今天"/妹妹"欢迎回到小岛"）
+- 复用 chat-service socket 通道，零新增服务
+- ESLint 0 error，dev:3000 + chat-service:3003 常驻
