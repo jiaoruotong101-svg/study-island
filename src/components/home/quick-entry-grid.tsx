@@ -78,7 +78,8 @@ const ENTRIES: Entry[] = [
     description: "看看这段时间的坚持",
     icon: "BarChart3",
     target: "stats",
-    available: false,
+    available: true,
+    navTab: "stats",
   },
   {
     key: "admin",

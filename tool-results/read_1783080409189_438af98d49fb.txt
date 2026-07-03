@@ -1,0 +1,830 @@
+     1→     1→# 学习小岛 — 工作日志
+     2→     2→
+     3→     3→---
+     4→     4→Task ID: SPRINT-1
+     5→     5→Agent: main (Z.ai Code)
+     6→     6→Task: Sprint 1 —— 项目地基与首页骨架
+     7→     7→
+     8→     8→Work Log:
+     9→     9→- 适配技术栈：用户文档为 Vite+Supabase，实际环境为 Next.js 16 App Router + Prisma + shadcn/ui + Zustand + TanStack Query，已保留全部设计理念
+    10→    10→- 建立治愈系设计系统（src/app/globals.css）：奶白背景 + 浅绿主色 + 浅灰辅助，浅/深色双模式，自定义滚动条，新增 leaf / leaf-soft / cream 语义色
+    11→    11→- 创建类型定义 src/lib/types.ts（Role / CurrentUser / TodayOverview / QuickEntry）
+    12→    12→- 创建 Zustand 用户态 src/store/user-store.ts（姐姐/妹妹切换，localStorage 持久化）
+    13→    13→- 创建陪伴语录库 src/lib/quotes.ts（8 条鼓励向文案，按日期稳定取一条）
+    14→    14→- 创建布局组件：app-header（绿叶 logo + 时段问候 + 身份标签）、app-footer（5 tab 底部导航，仅首页可用，其余"即将"）、app-shell（min-h-screen flex-col + mt-auto 实现 sticky footer 规范）
+    15→    15→- 创建首页子组件：role-switcher（身份切换，framer-motion 动效）、today-overview（4 张概览卡，演示数据）、companion-quote（每日语录，纯色无渐变）、quick-entry-grid（7 个功能入口，暂未上线）
+    16→    16→- 创建 useNow hook（useSyncExternalStore，避免 effect 内同步 setState 的 lint 报错 + hydration mismatch）
+    17→    17→- 创建 ThemeProvider（next-themes）
+    18→    18→- 创建 PWA manifest（public/manifest.webmanifest）+ 叶子图标（public/icon-leaf.svg）
+    19→    19→- 改造 layout.tsx（中文 lang、PWA metadata、viewport、ThemeProvider、AppShell）
+    20→    20→- 改造 page.tsx（首页四段式：欢迎语 + 语录 + 概览 + 身份切换 + 功能入口）
+    21→    21→- 修正 lint 报错（set-state-in-effect → useSyncExternalStore）
+    22→    22→- 修正 footer：移除 sticky bottom-0，仅用 mt-auto，确保长内容不覆盖、短内容贴底
+    23→    23→- 按 VLM 反馈微调：身份标签更柔和、桌面端卡片间距加大、卡片内边距加大
+    24→    24→
+    25→    25→Stage Summary:
+    26→    26→- 产物：可运行的治愈系首页，支持姐姐/妹妹身份切换，响应式（手机/平板/桌面），PWA manifest 就绪，深色模式就绪
+    27→    27→- 设计校验：VLM 二次确认配色无蓝紫渐变、留白舒适、无排版问题、陪伴感到位
+    28→    28→- 工程校验：ESLint 0 error，dev server 200，hydration 无 mismatch，footer sticky 行为符合规范
+    29→    29→- 已铺好的目录结构供后续 Sprint 复用：src/store、src/components/layout、src/components/home、src/hooks、src/lib
+    30→    30→- 数据层（Prisma）尚未启用，Sprint 1 用演示数据（产品定位允许的初始化演示数据例外）
+    31→    31→- 底部导航 5 tab 中 4 个标注"即将"，对应后续 Sprint：任务/番茄/聊天/我的
+    32→    32→
+    33→    33→---
+    34→    34→Task ID: SPRINT-2-Foundation
+    35→    35→Agent: main (Z.ai Code)
+    36→    36→Task: Sprint 2 地基 —— 玻璃质感 + 宋体/Times 字体 + 文件存储 + 导航架构
+    37→    37→
+    38→    38→Work Log:
+    39→    39→- 玻璃质感：在 globals.css 新增 .glass / .glass-strong / .glass-sheen 工具类（backdrop-blur + 半透明 + 高光边 + 内阴影 + 斜向高光伪元素），色系保持奶白/浅绿/浅灰
+    40→    40→- 新增 GlassCard 组件 src/components/ui/glass-card.tsx（variant/pad/sheen 三个维度）
+    41→    41→- 字体：next/font/google 加载 Tinos（Times 兼容）+ Noto Serif SC（宋体回退），html 字体栈 "Times New Roman", Tinos, Songti SC, SimSun, 宋体, Noto Serif SC, serif —— 中文自动用宋体、数字英文自动用 Times；新增 .font-num 工具类显式锁定数字
+    42→    42→- layout.tsx 加背景柔色斑（leaf/cream 模糊圆），让玻璃磨砂有内容可透
+    43→    43→- 创建共享 VoiceRecorder 组件 src/components/shared/voice-recorder.tsx（MediaRecorder API，inline/block 两种形态，useIsClient via useSyncExternalStore 避免 hydration mismatch）
+    44→    44→- 文件存储：uploads/ 目录 + POST /api/uploads（multipart，返回 url）+ GET /api/files/[filename]（防路径穿越，按 ext 设 mime，长缓存）
+    45→    45→- Prisma schema 新增 MistakeRecord（type/filePath/mimeType/duration/note/subject/createdBy）与 ChatMessage（senderRole/type/content/filePath/duration），db push 成功
+    46→    46→- 导航架构：新增 useNavStore（activeTab: home/mistakes/chat）；AppFooter 改为客户端 section 切换（首页/错题/聊天可用，番茄/我的"即将"），header/footer 应用 glass-strong
+    47→    47→- page.tsx 重构为 section 切换：activeTab=mistakes 渲染 MistakeSection，=chat 渲染 ChatSection，否则 HomeSection
+    48→    48→- 首页各卡片（role/overview/quote/quick-entry）升级为玻璃质感；日期与概览数字加 .font-num
+    49→    49→- 创建 stub: src/components/mistakes/mistake-section.tsx、src/components/chat/chat-section.tsx（占位，待子代理填充）
+    50→    50→- 安装 socket.io-client
+    51→    51→
+    52→    52→Stage Summary:
+    53→    53→- 地基就绪：玻璃质感全局、宋体+Times 字体生效、文件上传/访问可用、Prisma 错题/聊天表已建、导航 section 切换架构落地
+    54→    54→- ESLint 0 error 0 warning，dev server 200，next/font 编译通过
+    55→    55→- 待并行子代理完成：2-a 错题模块、2-b 聊天模块（含 socket.io mini-service 端口 3003）
+    56→    56→- 共享契约（供子代理遵循）：
+    57→    57→  * GlassCard: import { GlassCard } from "@/components/ui/glass-card"; props: variant?('default'|'strong') sheen? pad?('none'|'sm'|'md'|'lg')
+    58→    58→  * VoiceRecorder: import { VoiceRecorder } from "@/components/shared/voice-recorder"; props: onComplete(blob,durationSec) variant?('inline'|'block') disabled?
+    59→    59→  * 上传: POST /api/uploads (FormData field 'file') -> { ok, filename, url, mimeType, size }
+    60→    60→  * 访问: GET /api/files/<filename>
+    61→    61→  * 当前身份: useUserStore(s=>s.currentUser) => { id, name, role: 'sister'|'younger' }
+    62→    62→  * 数据库: import { db } from '@/lib/db'
+    63→    63→  * 设计铁律：奶白/浅绿/浅灰，禁蓝紫，禁色块渐变（玻璃高光除外），文案陪伴不催促，文件<500行，单职责
+    64→    64→
+    65→    65→---
+    66→    66→Task ID: 2-a
+    67→    67→Agent: full-stack-developer (mistake module)
+    68→    68→Task: 错题记录模块（拍照/上传图片/录音 + CRUD）
+    69→    69→
+    70→    70→Work Log:
+    71→    71→- 通读 worklog.md / page.tsx / GlassCard / VoiceRecorder / user-store / db / files 路由，确认共享契约与设计铁律
+    72→    72→- 新建 src/app/api/mistakes/route.ts：
+    73→    73→  * GET：db.mistakeRecord.findMany({ orderBy: createdAt desc })，map 成 DTO（含 url=/api/files/<filePath>），返回 JSON 数组
+    74→    74→  * POST：JSON body 用 unknown + 类型守卫解析（type/filePath/mimeType/createdBy 必填，duration/note/subject 可选），防路径穿越，db.create，返回 201 + DTO
+    75→    75→  * runtime='nodejs'，全 catch + 中文陪伴向错误文案
+    76→    76→- 新建 src/app/api/mistakes/[id]/route.ts：
+    77→    77→  * DELETE：先 findUnique，不存在返 404；isSafeFilename 守卫后 fs.unlink（ENOENT 容忍），再 db.delete，返回 { ok: true }
+    78→    78→  * params 用 Promise<{ id: string }> 解析（Next.js 16 规范），runtime='nodejs'
+    79→    79→- 新建 src/components/mistakes/mistake-card.tsx：
+    80→    80→  * MistakeCard + 导出 MistakeRecord/MistakeType/CreatorRole 类型
+    81→    81→  * 图片：缩略图按钮 → Dialog 大图预览（DialogTitle/Description 走 sr-only 满足 a11y）
+    82→    82→  * 语音：原生 <audio controls> + 时长 (mm:ss，.font-num)
+    83→    83→  * 元信息：科目 Badge(leaf-soft) / 类型 Badge(outline) / 创建者 / 相对时间（中文，自实现）
+    84→    84→  * 删除：仅创建者本人可见，AlertDialog 二次确认，文案"留下也是一种记录"
+    85→    85→- 新建 src/components/mistakes/mistake-composer.tsx：
+    86→    86→  * 三种录入方式：拍照(<input capture=environment>) / 上传图片(<input multiple>) / 录音(共享 VoiceRecorder inline)
+    87→    87→  * 流程：选/拍图或录完音 → POST /api/uploads 拿 filePath → POST /api/mistakes 存库 → onCreated 推回父组件
+    88→    88→  * 多图串行上传，进度文案"正在上传图片 i/N"；状态机 idle/uploading/saving/done
+    89→    89→  * 科目 Select（10 项）+ 备注 Textarea(maxLength 500)，本次上传共用一份
+    90→    90→  * 错误用陪伴向文案："网络似乎抖了一下，重试一次试试"
+    91→    91→  * Blob → File 兜底（MediaRecorder 产出的 Blob 无 name，FormData 需要文件名），按 mime 推断扩展名
+    92→    92→- 覆盖 src/components/mistakes/mistake-section.tsx：
+    93→    93→  * 容器：标题区(含刷新按钮) + Composer + 列表（加载态 Skeleton×3 / 空态 GlassCard / 错误态条 / 正常态）
+    94→    94→  * useState + fetch（未引入 QueryClientProvider，遵循"先用简单的 useState + fetch"指引）
+    95→    95→  * 列表 max-h-[70vh] overflow-y-auto + 自定义滚动条（全局已就绪）
+    96→    96→  * framer-motion 列表项轻柔入场（opacity+y, delay 阶梯）
+    97→    97→  * useUserStore 取当前角色，header 副标题按姐姐/妹妹视角分别文案
+    98→    98→- 校验：bun run lint 通过（0 error 0 warning，清理了 mistake-card 里多余的 eslint-disable）
+    99→    99→- 端到端冒烟：curl 验证 GET/POST/DELETE 三接口均 200/201，dev.log 显示 Prisma query 正常执行
+   100→   100→
+   101→   101→Stage Summary:
+   102→   102→- 产物（5 个文件，严格遵守 task 范围）：
+   103→   103→  * src/app/api/mistakes/route.ts（GET 列表 / POST 新建，约 170 行）
+   104→   104→  * src/app/api/mistakes/[id]/route.ts（DELETE，约 70 行）
+   105→   105→  * src/components/mistakes/mistake-card.tsx（卡片 + 类型导出，约 230 行）
+   106→   106→  * src/components/mistakes/mistake-composer.tsx（三种录入 + 上传/保存状态机，约 290 行）
+   107→   107→  * src/components/mistakes/mistake-section.tsx（section 容器，约 160 行）
+   108→   108→- 关键决策：
+   109→   109→  * 状态管理：useState + fetch（项目未配 QueryClientProvider，避免改 layout）
+   110→   110→  * 类型导出挂在 mistake-card.tsx（单职责范围内最小代价）
+   111→   111→  * 删除权限：客户端 currentRole===createdBy 控制（2 人本地 PWA，trust the client）
+   112→   112→  * 路径穿越防护：POST 校验 filePath 不含 / ..；DELETE 校验后再 unlink
+   113→   113→  * 音频扩展名：按 mime 推断（mp4/m4a/ogg/mp3/webm），确保 /api/files MIME 正确
+   114→   114→  * 大图 Dialog 用 sr-only Title/Description 满足 Radix a11y 要求
+   115→   115→- ⚠️ 已知问题（重要）：
+   116→   116→  * 共享契约 /api/uploads 在 worklog 中标注已创建，但当前文件系统中 src/app/api/uploads/route.ts **不存在**（空目录存在）
+   117→   117→  * 本次任务范围严格限定为 5 个文件，未创建 /api/uploads/route.ts
+   118→   118→  * 影响：mistake-composer 上传图片/录音会 POST 到 /api/uploads 并失败（前端会显示"上传失败（404）"）；列表展示、查看大图、删除既有记录不受影响
+   119→   119→  * 建议：主代理确认 /api/uploads/route.ts 是否需要补建（文件读取端 /api/files/[filename] 已就绪）
+   120→   120→- 文案样例（陪伴向）：
+   121→   121→  * "再错一次也没关系，记下来就赚到了"
+   122→   122→  * "把嘴里的念叨也存下来了" / "悄悄把题目收进来了"
+   123→   123→  * "删掉这道题吗？留下也是一种记录"
+   124→   124→  * "记好了，慢慢来就好" / "网络似乎抖了一下，重试一次试试"
+   125→   125→  * 空态："妹妹还没记下错题。也许今天她做对了很多。" / "这里还空着，遇到不会的题就拍下来吧。"
+   126→   126→
+   127→   127→---
+   128→   128→Task ID: 2-b
+   129→   129→Agent: full-stack-developer (chat module)
+   130→   130→Task: 实时聊天模块（socket.io 中继 + 持久化 + 文字/语音）
+   131→   131→
+   132→   132→Work Log:
+   133→   133→- 通读 worklog.md / page.tsx / mistakes 全模块 / GlassCard / VoiceRecorder / user-store / db / uploads / files 路由 / examples/websocket，确认共享契约、设计铁律、socket 连接规范
+   134→   134→- 新建 mini-services/chat-service/package.json：独立 bun 项目，deps 仅 socket.io，scripts dev=`bun --hot index.ts`，type=module
+   135→   135→- 新建 mini-services/chat-service/index.ts（约 75 行）：
+   136→   136→  * createServer + socket.io，端口固定 3003，path '/'（Caddy 网关契约）
+   137→   137→  * cors origin:'*' methods:['GET','POST']，pingTimeout 60s / pingInterval 25s
+   138→   138→  * 仅监听 `chat:send` 事件 → io.emit('chat:message', payload) 广播（含发送者，前端按 id 去重）
+   139→   139→  * 不碰数据库、不维护用户列表（2 人场景，无需 join/leave）
+   140→   140→  * SIGTERM/SIGINT 优雅关闭（io.close → httpServer.close → exit 0）
+   141→   141→  * 连接/断开打日志，含 connectionCount
+   142→   142→- 新建 src/lib/chat-socket.ts（约 45 行）：
+   143→   143→  * socket.io-client 单例 helper，导出 getChatSocket / closeChatSocket
+   144→   144→  * 连接串 `io('/?XTransformPort=3003', {...})`，路径必为 '/'，端口只写在 query（Caddy 网关契约）
+   145→   145→  * transports websocket+polling，reconnection true，reconnectionDelay 阶梯式退避到 10s 上限
+   146→   146→  * 单例由模块级变量持有，跨 section 卸载/重挂不重连；监听器由调用方 on/off 自管
+   147→   147→- 新建 src/app/api/chat/messages/route.ts（约 175 行）：
+   148→   148→  * GET /api/chat/messages?limit=100：db.chatMessage.findMany({orderBy createdAt asc, take:limit})，limit 解析范围 [1,500] 默认 100，每条 toDTO 含 url=/api/files/<filePath> 或 null
+   149→   149→  * POST /api/chat/messages：JSON body 用 unknown + 类型守卫解析（senderRole/type 必填，text 必须有 content，voice 必须有 filePath）
+   150→   150→  * 防路径穿越：voice 的 filePath 不允许含 / 或 ..
+   151→   151→  * content 上限 5000 字、duration toOptionalInt 容错
+   152→   152→  * runtime='nodejs'，全 catch + 中文陪伴向错误文案
+   153→   153→  * 返回 201 + DTO（含 url）
+   154→   154→- 新建 src/components/chat/chat-message-bubble.tsx（约 140 行）：
+   155→   155→  * 导出 ChatMessage / ChatSenderRole / ChatMessageType 类型 + ChatMessageBubble 组件（与 mistake-card 同样模式）
+   156→   156→  * 自己靠右 leaf 色背景（bg-leaf/90 text-primary-foreground），对方靠左玻璃白（glass）
+   157→   157→  * text：宋体正文 whitespace-pre-wrap break-words + HH:mm 时间（.font-num）
+   158→   158→  * voice：小喇叭图标圆徽章 + 原生 audio controls（h-8 w-180/220）+ 时长 mm:ss（.font-num）
+   159→   159→  * 圆角细节：自己 rounded-tr-sm，对方 rounded-tl-sm（贴近 chat app 习惯）
+   160→   160→- 新建 src/components/chat/chat-composer.tsx（约 200 行）：
+   161→   161→  * 三件套：VoiceRecorder(inline) + Textarea(自适应高度) + 发送按钮(圆形 leaf 色)
+   162→   162→  * 文字流程：textarea Enter 发送、Shift+Enter 换行、输入法合成中（isComposing）不触发；maxLength 5000
+   163→   163→  * 语音流程：onComplete(blob, dur) → uploadBlob(/api/uploads, 按mime推断扩展名) → saveMessage(/api/chat/messages type=voice) → onSent(record)
+   164→   164→  * 状态机 idle/text/voice，busy 时禁用所有输入；进度小字"正在把语音送出去…"/"正在发送…"贴在输入框下
+   165→   165→  * textarea 复用 shadcn Textarea 的 field-sizing-content，覆盖 min-h-9 max-h-40 resize-none 移除边框
+   166→   166→  * 错误自管，文案陪伴向："消息没能发出去" / "语音没能发出去"
+   167→   167→- 覆盖 src/components/chat/chat-section.tsx（约 215 行）：
+   168→   168→  * 容器：header(标题 + 副标题 + 连接状态指示 + 刷新) → 错误条 → GlassCard(消息列表/加载/空态) → ChatComposer
+   169→   169→  * 标题/副标题/placeholder/空态文案全部按角色（sister/younger）陪伴向：younger "和姐姐说说话" / sister "陪妹妹说说话"
+   170→   170→  * useState + fetch（项目未配 QueryClientProvider，遵循"先用简单的 useState + fetch"指引）
+   171→   171→  * 挂载时 GET /api/chat/messages?limit=100 拉历史；idsRef 维护 id 集合做去重
+   172→   172→  * socket 监听 on('chat:message')：isChatMessagePayload 类型守卫校验后 appendMessage（按 id 去重）
+   173→   173→  * 发送：composer 持久化后回调 onSent(record) → 本组件 socket.emit('chat:send', record) + 本地 appendMessage（发送者也会收到广播，去重避免重复）
+   174→   174→  * 自动滚到底：wasNearBottomRef 记录用户是否在底部 80px 内，仅在底部时新消息才 scroll；手动滚上去读历史不会被强拉回
+   175→   175→  * 加载态：4 个左右交错的 Skeleton 行（标题 + 气泡）；空态：圆徽章 + "还没有消息，跟姐姐说句晚安吧"
+   176→   176→  * 连接状态：绿点已连接 / 灰点(脉冲)重连中；socket on connect/disconnect/reconnect_attempt/reconnect 同步状态
+   177→   177→  * framer-motion 消息项轻柔入场（opacity+y, delay 阶梯 0.02s）
+   178→   178→- 校验：bun run lint 通过（0 error 0 warning，exit 0）
+   179→   179→- 端到端冒烟（curl）：
+   180→   180→  * GET /api/chat/messages?limit=10 → 200，Prisma 查询日志正常
+   181→   181→  * POST /api/chat/messages {younger,text,测试一下聊天} → 201，返回完整 DTO
+   182→   182→  * POST 缺字段 → 400 "缺少必填字段：senderRole / type"
+   183→   183→  * POST text 空内容 → 400 "文字消息内容不能为空"
+   184→   184→  * POST voice 缺 filePath → 400 "语音消息缺少 filePath"
+   185→   185→  * POST voice filePath="../etc/passwd" → 400 "filePath 不合法"（防穿越生效）
+   186→   186→  * 测试数据已清理（bun -e db.chatMessage.deleteMany({})）
+   187→   187→- mini-service 启动验证：
+   188→   188→  * cd mini-services/chat-service && bun install → 22 包安装成功（socket.io@4.8.3）
+   189→   189→  * bun run dev → 日志 "[chat-service] socket.io relay listening on :3003 (path: /)"
+   190→   190→  * ss -tlnp 确认 :3003 LISTEN（bun pid 5585）
+   191→   191→  * pkill 触发 SIGTERM → "[chat-service] SIGTERM received, closing server..." → "server closed" 优雅退出
+   192→   192→
+   193→   193→Stage Summary:
+   194→   194→- 产物（7 个文件，严格遵守 task 范围）：
+   195→   195→  * mini-services/chat-service/package.json（独立 bun 项目元信息，约 14 行）
+   196→   196→  * mini-services/chat-service/index.ts（socket.io 中继服务，约 75 行）
+   197→   197→  * src/lib/chat-socket.ts（前端 socket 单例 helper，约 45 行）
+   198→   198→  * src/app/api/chat/messages/route.ts（GET 历史 / POST 新建，约 175 行）
+   199→   199→  * src/components/chat/chat-message-bubble.tsx（文字/语音气泡 + 类型导出，约 140 行）
+   200→   200→  * src/components/chat/chat-composer.tsx（textarea + 发送 + 语音输入器，约 200 行）
+   201→   201→  * src/components/chat/chat-section.tsx（section 容器，约 215 行）
+   202→   202→- 关键决策：
+   203→   203→  * 架构分层：socket 服务纯中继（不碰 DB），主应用 API 负责持久化 —— 前端先 POST 拿完整记录再 emit，避免双写不一致
+   204→   204→  * 去重策略：socket.emit 广播含发送者自身，前端 idsRef Set 按 id 去重，避免本地 append + socket 回环造成重复
+   205→   205→  * socket 单例：getChatSocket 模块级变量持有，跨 section 卸载/重挂不重连；监听器 on/off 由 ChatSection 自管，effect cleanup 只 off 不 disconnect
+   206→   206→  * 自动滚到底：wasNearBottomRef 容差 80px，用户主动滚上去读历史时不被强拉回
+   207→   207→  * 类型导出挂在 chat-message-bubble.tsx（与 mistake-card 同模式，单职责范围内最小代价）
+   208→   208→  * 路径穿越防护：POST voice 校验 filePath 不含 / ..（与 mistakes API 一致）
+   209→   209→  * textarea 自适应高度：复用 shadcn Textarea 的 field-sizing-content（Chrome/Edge 原生支持），覆盖 min-h-9 max-h-40
+   210→   210→  * 文案角色陪伴向：younger "和姐姐说说话"/"想说就说，姐姐都听着"/"还没有消息，跟姐姐说句晚安吧" vs sister "陪妹妹说说话"/"你说的每一句，她都能看见"/"给妹妹留句晚安吧"
+   211→   211→- mini-service 启动方式：
+   212→   212→  * cd mini-services/chat-service && bun install（首次）
+   213→   213→  * bun run dev（热重载，端口固定 3003，path '/'）
+   214→   214→  * 与 Caddy 网关配合：前端 io('/?XTransformPort=3003') → Caddy 转发到 localhost:3003
+   215→   215→- ⚠️ 已知事项 / 后续注意：
+   216→   216→  * mini-service 默认未由主应用 dev 流程拉起，需要主代理在最终部署/启动脚本里加上 `bun run dev`（后台），否则聊天实时性不可用（仍可发消息但只能下次刷新看到对方回复）
+   217→   217→  * socket.io-client 在 SSR 时 import 不报错（仅 io() 调用在 effect 内），已确认 dev server 编译通过
+   218→   218→  * 语音消息 native <audio controls> 在不同浏览器高度略有差异（Chrome/Edge 32px、Safari 可能更高），已设 h-8 作为目标高度，可接受
+   219→   219→  * 单条文字消息上限 5000 字（API 层 slice），与 textarea maxLength 一致
+   220→   220→- 文案样例（陪伴向）：
+   221→   221→  * 标题："和姐姐说说话" / "陪妹妹说说话"
+   222→   222→  * 副标题："想说就说，姐姐都听着" / "你说的每一句，她都能看见"
+   223→   223→  * placeholder："想说点什么，姐姐都听着呢…" / "给妹妹留句话吧，慢慢打也行…"
+   224→   224→  * 空态："还没有消息，跟姐姐说句晚安吧" / "还没开始说话。给妹妹留句晚安吧"
+   225→   225→  * 进度："正在把语音送出去…" / "正在发送…"
+   226→   226→  * 错误："消息没能发出去" / "语音没能发出去" / "聊天记录暂时打不开，稍等一下再试"
+   227→   227→  * 连接状态："已连接" / "重连中"
+   228→   228→
+   229→   229→---
+   230→   230→Task ID: SPRINT-2-Integration
+   231→   231→Agent: main (Z.ai Code)
+   232→   232→Task: Sprint 2 集成 + 端到端自检
+   233→   233→
+   234→   234→Work Log:
+   235→   235→- 补建遗漏的 /api/uploads/route.ts（multipart 上传，uuid 文件名，返回 url/mimeType/size），并给 /api/files/[filename] 与 /api/uploads 加 runtime=nodejs
+   236→   236→- 启动 chat mini-service（mini-services/chat-service，bun --hot，端口 3003）后台常驻
+   237→   237→- 清理子代理冒烟测试残留数据
+   238→   238→- Agent Browser 端到端自检（关键发现：socket 必须经 Caddy:81 网关才通，直连 :3000 会因 XTransformPort 不被 Next 识别而显示"重连中"；改用 :81 后 socket"已连接"）
+   239→   239→- 验证项：
+   240→   240→  * 首页玻璃质感 + 宋体/Times 字体（VLM 确认：半透明卡片/高光边/背景透出、中文宋体数字Times、奶白浅绿浅灰无蓝紫渐变）
+   241→   241→  * 底部 nav 切换：首页/错题/聊天可用，番茄/我的"即将"
+   242→   242→  * 错题板块：拍照/上传图片/录音三入口齐全；curl 验证 upload→create→list 全链路 200/201；浏览器渲染缩略图+大图Dialog+删除按钮；VLM 确认视觉
+   243→   243→  * 聊天板块：双会话（妹妹+姐姐）实时验证——姐姐发送文字，妹妹会话不刷新即时收到（socket.io 端到端打通）；语音消息上传+建库+audio播放器渲染+0:08时长显示
+   244→   244→  * 控制台无 error/warn
+   245→   245→- 清理测试数据，恢复干净初始态
+   246→   246→
+   247→   247→Stage Summary:
+   248→   248→- Sprint 2 全部交付：玻璃质感全局、宋体+Times 字体、错题记录(拍照/上传/录音/CRUD)、实时聊天(文字+语音/双向往来)
+   249→   249→- 工程校验：ESLint 0 error 0 warning，dev:3000 + chat-service:3003 常驻，hydration 无 mismatch
+   250→   250→- 关键架构决策：单路由 + 客户端 section 切换（useNavStore）；聊天 = socket 中继(3003) + 主应用 API 持久化(3000)；文件存储 uploads/ + /api/files 访问
+   251→   251→- 待后续 Sprint：番茄钟、每日留言、心情记录、学习统计、姐姐后台、AI 总结
+   252→   252→- 注意事项给后续：实时功能测试必须走 Caddy:81 而非直连 :3000
+   253→   253→
+   254→   254→---
+   255→   255→Task ID: SPRINT-2.1
+   256→   256→Agent: main (Z.ai Code)
+   257→   257→Task: 首页陪伴语录改为姐姐/妹妹可自由编辑的小岛留言，标注视角，实时同步
+   258→   258→
+   259→   259→Work Log:
+   260→   260→- Prisma 新增 HomeQuote 单例模型（id 固定 "island-quote"，content/authorRole/updatedAt），db push
+   261→   261→- 新增 GET/PUT /api/quote（upsert 单例；空内容/超200字/非法 role 校验；runtime=nodejs）
+   262→   262→- chat-service 加 quote:update → quote:updated 中继事件（bun --hot 自动重启生效）
+   263→   263→- chat-socket.ts 契约注释补充 quote 事件
+   264→   264→- 新建 src/lib/quote-types.ts（HomeQuote 共享类型）
+   265→   265→- 新建 src/components/home/quote-editor.tsx（Dialog 编辑器：textarea 200字限、视角化 placeholder、保存调 PUT、错误提示）
+   266→   266→- 改造 companion-quote.tsx：挂载 GET /api/quote 加载；无留言回退 getQuoteOfTheDay；显示视角标注（姐姐留/妹妹留）+相对时间；监听 socket quote:updated 实时刷新；编辑入口铅笔按钮；保存成功 toast
+   267→   267→- 修复：dev server 热重载不重建 PrismaClient（globalForPrisma 缓存），db.homeQuote undefined → 重启 dev server 加载新生成的 client
+   268→   268→- Agent Browser 双会话端到端验证（经 Caddy:81）：
+   269→   269→  * 无留言时回退默认语录库
+   270→   270→  * 妹妹编辑保存 → 标注"妹妹 留"，姐姐会话首页实时收到（不刷新）
+   271→   271→  * 姐姐会话切身份后编辑 → 标注"姐姐 留"，妹妹会话实时收到
+   272→   272→  * 刷新后留言持久化（数据库）
+   273→   273→  * 空内容前端+API 双重校验"留句话再走呀"
+   274→   274→  * VLM 确认视觉：玻璃质感、视角标注、铅笔编辑按钮、配色合规
+   275→   275→  * 控制台无 error
+   276→   276→- 清理测试数据恢复干净初始态
+   277→   277→
+   278→   278→Stage Summary:
+   279→   279→- 首页"小岛留言"功能交付：姐姐妹妹共享同一条留言，可自由编辑，标注作者视角（姐姐留/妹妹留），socket 实时双向同步，数据库持久化
+   280→   280→- 复用现有 chat-service socket 通道，零新增服务
+   281→   281→- 设计：编辑器 placeholder 随当前身份切换文案（姐姐视角"给妹妹留句鼓励"、妹妹视角"想对姐姐说什么"），体现双向陪伴
+   282→   282→- ESLint 0 error，dev:3000 + chat-service:3003 常驻
+   283→   283→
+   284→   284→---
+   285→   285→Task ID: SPRINT-2.2
+   286→   286→Agent: main (Z.ai Code)
+   287→   287→Task: 底部导航栏冻结常驻，始终可见可切换
+   288→   288→
+   289→   289→Work Log:
+   290→   290→- AppFooter：footer 从 mt-auto（文档流末尾）改为 fixed bottom-0 left-0 w-full z-40，始终浮在视口底部
+   291→   291→- AppShell：main 加 pb-[calc(5.5rem+env(safe-area-inset-bottom))] 留出 footer 空间，避免内容被遮挡
+   292→   292→- Agent Browser 多场景验证（经 Caddy:81）：
+   293→   293→  * 移动端 390×700：footer fixed bottom=700=视口高 ✅；滚到最底 main 内容不被遮挡（gap 94px）✅
+   294→   294→  * 滚动中途 footer 纹丝不动贴底 ✅；滚动状态下点击 footer tab 可切换 section ✅
+   295→   295→  * 错题板块：滚到底空态文案不被遮挡 ✅
+   296→   296→  * 聊天板块：composer（输入框/发送/录音）在 footer 上方 209px 不遮挡 ✅
+   297→   297→  * 桌面端 1280×800：footer fixed bottom=800=视口高 ✅；滚动时常驻 ✅
+   298→   298→  * VLM 确认：导航栏冻结视口底、玻璃质感、内容未遮挡、配色合规
+   299→   299→  * 控制台无 error
+   300→   300→- ESLint 0 error，dev:3000 + chat-service:3003 常驻
+   301→   301→
+   302→   302→Stage Summary:
+   303→   303→- 底部导航栏实现真正冻结（fixed），无论首页/错题/聊天、无论内容多长、无论滚动位置，始终可见可切换
+   304→   304→- 通过 main padding-bottom 预留空间，确保任何 section 的底部内容（含聊天输入框）不被遮挡
+   305→   305→- 兼容移动端 safe-area-inset-bottom（iOS 底部安全区）
+   306→   306→
+   307→   307→---
+   308→   308→Task ID: SPRINT-3-Foundation
+   309→   309→Agent: main (Z.ai Code)
+   310→   310→Task: Sprint 3 地基 —— 今日任务+番茄钟数据层/导航/API
+   311→   311→
+   312→   312→Work Log:
+   313→   313→- Prisma 新增 Task（title/subject/estimatedPomodoros/completedPomodoros/done/completedAt/createdBy/taskDate）与 FocusSession（role/taskId?/durationMinutes/type/completedAt）模型，db push 成功
+   314→   314→- 新增 src/lib/task-types.ts（Task/FocusSession/CreatorRole/TodayOverviewData 共享类型）
+   315→   315→- API:
+   316→   316→  * GET /api/tasks?date=YYYY-MM-DD + POST（建任务，校验 title/createdBy/estimatedPomodoros 1-12）
+   317→   317→  * PATCH /api/tasks/[id]（done 勾选 / incPomodoro 番茄+1）
+   318→   318→  * DELETE /api/tasks/[id]
+   319→   319→  * GET /api/focus-sessions?date=&role= + POST（记录专注/休息会话，校验 role/type/duration 1-120）
+   320→   320→  * GET /api/today-overview（聚合今日待完成/已完成任务数+专注分钟数）
+   321→   321→- nav-store: NavTab 加 "tasks"
+   322→   322→- app-footer: 第3个 tab 从"番茄(即将)"改为"任务(可用)"，icon 改 ListChecks
+   323→   323→- page.tsx: activeTab==="tasks" 渲染 TaskSection
+   324→   324→- 创建 stub src/components/tasks/task-section.tsx（待子代理填充）
+   325→   325→- 重启 dev server 加载新 Prisma client，curl 验证 /api/tasks 返回 {tasks:[]}、/api/today-overview 返回 {0,0,0}
+   326→   326→- ESLint 0 error
+   327→   327→
+   328→   328→Stage Summary:
+   329→   329→- 地基就绪：任务+专注数据层、5 个 API、导航激活
+   330→   330→- 待并行子代理：3-a 任务 UI（list/item/composer + section容器）、3-b 番茄钟（timer + store）
+   331→   331→- 共享契约（供子代理）：
+   332→   332→  * 类型: import type { Task, FocusSession, CreatorRole } from "@/lib/task-types"
+   333→   333→  * 当前身份: useUserStore(s=>s.currentUser).role => "sister"|"younger"
+   334→   334→  * 任务 API: GET /api/tasks?date=YYYY-MM-DD -> {tasks:Task[]}; POST /api/tasks {title,subject?,estimatedPomodoros?,createdBy,taskDate?} -> {ok,task}; PATCH /api/tasks/[id] {done?:bool, incPomodoro?:true} -> {ok,task}; DELETE /api/tasks/[id]
+   335→   335→  * 专注 API: GET /api/focus-sessions?date=&role= -> {sessions}; POST /api/focus-sessions {role,taskId?,durationMinutes,type:"focus"|"break"} -> {ok,session}
+   336→   336→  * 玻璃卡: import { GlassCard } from "@/components/ui/glass-card" (variant/pad/sheen)
+   337→   337→  * 今日日期串: 用 new Date() 本地时区拼 "YYYY-MM-DD"
+   338→   338→  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促，文件<500行单职责，TS严格无any
+   339→   339→
+   340→   340→---
+   341→   341→Task ID: 3-a
+   342→   342→Agent: full-stack-developer (task UI)
+   343→   343→Task: 今日任务 UI（CRUD + 联动番茄钟预留）
+   344→   344→
+   345→   345→Work Log:
+   346→   346→- 通读 worklog.md（Sprint 1/2 地基 + 2-a 错题 + 2-b 聊天 + 2.1 留言 + 2.2 footer 冻结）、task-types.ts、tasks API（route.ts + [id]/route.ts）、user-store、page.tsx、GlassCard、shadcn 组件清单，确认共享契约与设计铁律
+   347→   347→- 新建 src/components/tasks/task-section.types.ts：re-export Task/CreatorRole、SUBJECTS（数学/语文/英语/物理/化学/生物/历史/地理/政治/其他）、POMODORO_OPTIONS(1-6)、TaskComposerPayload、TaskItemHandlers、todayStr()
+   348→   348→- 新建 src/components/tasks/task-composer.tsx：任务名 Input（回车提交，isComposing 守卫，maxLength 100）+ 科目 Select（10 项 + "不选科目"）+ 预计番茄数 Select（1-6，默认 1）+ 添加按钮；视角化 placeholder；本地校验 + 错误文案
+   349→   349→- 新建 src/components/tasks/task-item.tsx：Checkbox（leaf 色）+ 任务名（完成态删除线灰化）+ 科目 Badge（leaf-soft）+ 🍅 completedPomodoros/estimatedPomodoros（.font-num）+ 创建者标注 + "设为专注"按钮（active 时 leaf 高亮禁用）+ 删除按钮（AlertDialog 二次确认，destructive 色）；active 态 leaf 边框 + 浅绿底 + "专注中"Badge；framer-motion layout 入场动画
+   350→   350→- 新建 src/components/tasks/task-list.tsx：状态分支（loading Skeleton×3 / error 陪伴条 / empty 视角化空态 / normal 分两组：待完成 + 已完成 N）；max-h-[40vh] overflow-y-auto；已完成组仅非空时渲染
+   351→   351→- 覆盖 src/components/tasks/task-section.tsx：容器，useState+fetch；标题区（ListChecks 图标 + "今日任务" + 视角化副标题 + 刷新按钮）；TaskComposer；TaskList；番茄钟区域（dynamic import + PomodoroBoundary 兜底）；乐观更新+回滚（toggle/delete/pomodoroComplete）；activeTaskId 状态 + activeTask 推导；handlePomodoroComplete PATCH incPomodoro
+   352→   352→- 关键决策：番茄钟 dynamic import 与 turbopack 静态解析冲突 —— 实测字面量/模板字面量/运行时拼接三种 import() 在 turbopack 下都无法延迟解析，文件不存在时整站 500（page.tsx 静态导入 TaskSection）。为避免整站 500，在 src/components/pomodoro/pomodoro-timer.tsx 放置最小占位 stub（bash `[ -f file ] ||` guard 保证不覆盖 3-b 已有成果），严格遵循契约（命名导出 PomodoroTimer + props activeTask/onPomodoroComplete），渲染"番茄钟即将上线"卡片 + 当前专注任务展示 + "手动记一段专注"按钮验证端到端链路。3-b 覆盖即可，无需协调。即便有 stub 仍加 PomodoroBoundary（class ErrorBoundary）兜底
+   353→   353→- 清理：移除 task-section.tsx 未使用的 GlassCard 导入；移除 task-section.types.ts 未使用的 TaskGroupMeta/isCreatorRole 与对应 import
+   354→   354→- 校验：bun run lint 0 error 0 warning exit 0；dev server `✓ Compiled` `GET / 200`（首页正常，不再 500）
+   355→   355→- API 冒烟（curl）：POST /api/tasks 201 / GET 200 / PATCH incPomodoro 200（completedPomodoros 0→1）/ PATCH done 200（completedAt 设置）/ DELETE 200 / 列表回归空 —— 全链路通过，测试数据已清理
+   356→   356→
+   357→   357→Stage Summary:
+   358→   358→- 产物（5 个允许文件 + 1 个必要编译桩，全部 < 500 行）：
+   359→   359→  * src/components/tasks/task-section.types.ts（55 行，共享类型与常量）
+   360→   360→  * src/components/tasks/task-composer.tsx（167 行，录入器）
+   361→   361→  * src/components/tasks/task-item.tsx（189 行，单条任务卡）
+   362→   362→  * src/components/tasks/task-list.tsx（131 行，列表区 + 状态分支）
+   363→   363→  * src/components/tasks/task-section.tsx（351 行，section 容器 + 番茄钟联动）
+   364→   364→  * src/components/pomodoro/pomodoro-timer.tsx（102 行，**编译桩**，3-b 将覆盖）
+   365→   365→- 关键决策：
+   366→   366→  * 状态管理：useState + fetch（项目未配 QueryClientProvider，沿用 2-a/2-b 模式）
+   367→   367→  * 乐观更新+回滚：toggle/delete/pomodoroComplete 三处均先本地变更再 PATCH，失败回滚+setError/reload
+   368→   368→  * activeTaskId 闭包新鲜度：handleDelete 用 setActiveTaskId 函数式更新，避免把 activeTaskId 放进依赖数组导致 handlers 频繁重建
+   369→   369→  * 番茄钟联动：activeTaskId 由点"设为专注"切换（toggle 语义）；activeTask 从 tasks 数组按 id 查找；任务被标完成时自动清空 activeTaskId；onPomodoroComplete PATCH incPomodoro + 乐观+1/回滚-1
+   370→   370→  * 番茄钟编译桩：turbopack 对 import() 字面量做静态解析，3-b 文件不存在时整站 500，故放最小 stub（遵循契约，3-b 覆盖即可）+ PomodoroBoundary 兜底
+   371→   371→  * 文案陪伴向：副标题/composer placeholder/空态/删除确认/错误文案全部按 sister/younger 视角区分，不催促
+   372→   372→- ⚠️ 已知问题 / 交接事项：
+   373→   373→  * pomodoro-timer.tsx 当前是 stub：3-b 创建真实实现时直接覆盖，契约不变（命名导出 PomodoroTimer，props { activeTask: Task | null; onPomodoroComplete: (taskId: string|null) => void }）。task-section 传 activeTask（tasks 数组按 activeTaskId 查找）+ handlePomodoroComplete（PATCH incPomodoro + 乐观+回滚）
+   374→   374→  * stub 的"手动记一段专注"按钮是临时占位（验证 pomodoro→task 链路）；3-b 实现真实计时器后自然消失
+   375→   375→  * 此 stub 文件超出原"只允许 5 个文件"范围，属让整站可编译可运行的必要妥协；已用 bash guard 保证不覆盖 3-b 已有成果
+   376→   376→  * /agent-ctx 路径在当前环境权限不可写（Permission denied），agent-ctx 工作记录改存于 /home/z/my-project/agent-ctx/3-a-full-stack-developer-task-ui.md
+   377→   377→- 文案样例（陪伴向）：
+   378→   378→  * 副标题："今天想做哪几件事？慢慢来，一件一件做就好。" / "看看今天想陪她做哪些，不催，陪着她就好。"
+   379→   379→  * placeholder："今天想做哪件事，慢慢写就好…" / "想陪她做点什么，写下来吧…"
+   380→   380→  * 空态："今天还没列任务，先想想最重要的一件是什么" / "妹妹还没列任务，也许她想先歇会儿"
+   381→   381→  * 删除确认："今天做不完也没关系，删掉就是不想做了，以后还能再加。"
+   382→   382→  * 错误："任务暂时打不开，稍等一下再试" / "没能加进来，再试一次看看" / "没能保存，再点一次试试"
+   383→   383→
+   384→   384→---
+   385→   385→Task ID: 3-b
+   386→   386→Agent: full-stack-developer (pomodoro)
+   387→   387→Task: 番茄钟（计时状态机 + 圆形进度 + 段完成持久化）
+   388→   388→
+   389→   389→Work Log:
+   390→   390→- 通读 worklog.md（Sprint 1/2 地基 + 2-a 错题 + 2-b 聊天 + 2.1 留言 + 2.2 footer 冻结 + Sprint 3 地基 + 3-a 任务 UI）、task-types.ts、focus-sessions API、user-store、GlassCard、task-section.tsx（含 PomodoroTimer 契约与 dynamic import）、3-a 留下的 pomodoro-timer.tsx 编译桩、use-now.ts 与 voice-recorder.tsx 的 useIsClient 模式、globals.css（leaf/leaf-soft/cream 语义色 + .font-num + .glass-strong + .glass-sheen）、Button/Badge 组件
+   391→   391→- 新建 src/store/pomodoro-store.ts（184 行）：
+   392→   392→  * Zustand 不持久化（计时态不跨刷新，符合番茄钟直觉）
+   393→   393→  * 状态：phase("focus"|"break")、status("idle"|"running"|"paused")、remainingSec、currentPhaseTotalSec、completedFocusCount、todayFocusCount、todayFocusInitialized、lastCompletedSeq（信号）、lastCompleted（刚结束段信息）
+   394→   394→  * 时长常量导出：FOCUS_MIN=25、SHORT_BREAK_MIN=5、LONG_BREAK_MIN=15、LONG_BREAK_EVERY=4
+   395→   395→  * actions：start/pause/reset/skip/tick/setTodayFocusCount
+   396→   396→  * tick：remainingSec>1 常规递减；===1 时自然完成段，同 tick 内切到下一段（保留 running 自动衔接），focus 段递增 completedFocusCount + todayFocusCount，设置 lastCompleted + 推进 lastCompletedSeq
+   397→   397→  * skip：仅切下一段，不递增 completedFocusCount、不设 lastCompleted（"跳过"非"完成"，组件 effect 不触发副作用）
+   398→   398→  * 长休判定：completedFocusCount>0 && %4===0（避免 0 段也长休）
+   399→   399→  * nextBreakSec / computeNextPhase 辅助函数，纯逻辑无副作用
+   400→   400→  * store 不持有 activeTask / onPomodoroComplete（组件 props），保证单职责
+   401→   401→- 覆盖 src/components/pomodoro/pomodoro-timer.tsx（382 行，原 102 行 stub）：
+   402→   402→  * 严格匹配契约：export interface PomodoroTimerProps { activeTask: {id,title,subject,estimatedPomodoros,completedPomodoros}|null; onPomodoroComplete: (taskId: string|null)=>void }
+   403→   403→  * useIsClient（useSyncExternalStore 模式）+ useUserStore 取 role
+   404→   404→  * 订阅 store 字段 + actions
+   405→   405→  * refs 保存 activeTask / onPomodoroComplete / role 最新值，避免副作用 effect 依赖 props
+   406→   406→  * Effect 1：挂载时若 todayFocusInitialized=false，GET /api/focus-sessions?date=today，过滤 type==="focus" 计数后 setTodayFocusCount（仅一次，cancelled 标志防竞态）
+   407→   407→  * Effect 2：isClient && status==="running" 时 setInterval(1000)→tick()，卸载/暂停清 interval
+   408→   408→  * Effect 3：监听 lastCompletedSeq 变化（prevSeqRef 比对），通过 usePomodoroStore.getState().lastCompleted 取最新段信息，POST /api/focus-sessions（失败仅日志），focus 段调 onPomodoroCompleteRef.current(taskId)
+   409→   409→  * UI：GlassCard variant=strong sheen pad=lg
+   410→   410→    - 顶部：Timer 图标 + "番茄钟" + 🍅 × N（今日，font-num tabular-nums；未初始化显示 …）
+   411→   411→    - 阶段标签 Badge（leaf 边框）+ 任务名（truncate，无则"自由专注"）
+   412→   412→    - 圆形进度环 SVG（viewBox 240，strokeWidth 12，leaf 色，rotate(-90) 从 12 点起；key=phase 段切换重挂载避免回弹；transition-[stroke-dashoffset] duration-500 ease-out 仅作用于段内递减）+ 中心 mm:ss（font-num text-5xl/6xl tabular-nums）+ 段时长小字
+   413→   413→    - 陪伴文案：focus "专注完这一段就歇会儿" / "再专注 1 个就长休啦"（nextFocusTriggersLongBreak）；break "休息也是学习的一部分" / "好好歇歇，待会儿再开始"
+   414→   414→    - 控制按钮组：重置（ghost icon，idle 禁用）+ 主按钮（开始/暂停/继续，size=lg，bg-leaf text-primary-foreground，min-w-120px）+ 跳过（ghost icon，idle 禁用）
+   415→   415→    - 底部：activeTask 时显示已完成/预计番茄数（font-num）
+   416→   416→    - framer-motion 入场动画（opacity+y）
+   417→   417→  * 响应式：环 h/w-[200px] sm:h/w-[240px]；mm:ss text-5xl sm:text-6xl；任务名 max-w 180/260
+   418→   418→  * ARIA：aria-label 番茄钟 / 重置当前段 / 跳过当前段；SVG aria-hidden
+   419→   419→- 校验：bun run lint → exit 0，0 error 0 warning
+   420→   420→- API 冒烟（curl）：
+   421→   421→  * GET /api/focus-sessions?date=2026-07-03 → 200 `{sessions:[]}`
+   422→   422→  * POST focus session {younger,null,25,focus} → 201 `{ok:true,session:{...}}`
+   423→   423→  * POST break session {younger,null,5,break} → 201
+   424→   424→  * POST bad role → 400 `{ok:false,error:"不知道是谁专注的"}`
+   425→   425→  * GET 再查 → 返回两条 desc 排序
+   426→   426→  * 测试数据已清理（db.focusSession.deleteMany）
+   427→   427→
+   428→   428→Stage Summary:
+   429→   429→- 产物（2 个文件，均 < 500 行）：
+   430→   430→  * src/store/pomodoro-store.ts（184 行，Zustand 计时状态机，不持久化）
+   431→   431→  * src/components/pomodoro/pomodoro-timer.tsx（382 行，完整番茄钟，覆盖 3-a 的 102 行 stub）
+   432→   432→- 关键决策：
+   433→   433→  * store/组件职责分离：store 持有计时核心 + 段切换纯逻辑，副作用（POST + onPomodoroComplete）由组件 effect 监听 lastCompletedSeq 触发
+   434→   434→  * 自然完成 vs 跳过：tick 到 0 推进 lastCompletedSeq（触发副作用），skip 仅切段不记录不回调
+   435→   435→  * props 新鲜度：activeTask/onPomodoroComplete/role 用 ref 保存，副作用 effect 依赖仅 lastCompletedSeq，避免 props 变化重触发
+   436→   436→  * todayFocusCount：挂载时 GET 一次（todayFocusInitialized 防重复），自然完成专注时本地自增；POST 失败仅日志，不阻塞 onPomodoroComplete
+   437→   437→  * 进度环：key=phase 段切换重挂载避免回弹动画，transition 仅作用于段内逐秒递减
+   438→   438→  * 计时跨 nav 切换会"暂停"（spec 明确接受）：interval 在组件 useEffect，TaskSection 卸载即清；store 单例保留 remainingSec，重新挂载从断点继续
+   439→   439→- 工程校验：ESLint 0 error 0 warning，dev server `✓ Compiled`，API 三接口冒烟通过
+   440→   440→- ⚠️ 已知事项：
+   441→   441→  * 计时跨 nav 切换会"暂停"（spec 接受）；后续若需真正后台计时，可改 Web Worker 或 module-level setInterval
+   442→   442→  * onPomodoroComplete 与 POST focus session 解耦：POST 失败仅日志，今日番茄数会在下次挂载从 API 重拉（可能少于本地 store 计数）
+   443→   443→  * 长休判定基于 currentPhaseTotalSec === LONG_BREAK_SEC，若未来调整时长常量需同步
+   444→   444→- 文案样例（陪伴向）：
+   445→   445→  * 阶段标签："专注中" / "休息一下" / "长休息"
+   446→   446→  * 陪伴文案："专注完这一段就歇会儿" / "再专注 1 个就长休啦" / "休息也是学习的一部分" / "好好歇歇，待会儿再开始"
+   447→   447→  * 任务名缺省："自由专注"
+   448→   448→  * 段时长提示："专注 25 分钟" / "短休 5 分钟" / "长休 15 分钟"
+   449→   449→  * 今日计数："🍅 × N 今日"
+   450→   450→
+   451→   451→---
+   452→   452→Task ID: SPRINT-3-Integration
+   453→   453→Agent: main (Z.ai Code)
+   454→   454→Task: Sprint 3 集成 + 端到端自检 + 首页概览接真实数据
+   455→   455→
+   456→   456→Work Log:
+   457→   457→- 今日概览卡片接真实数据：改造 today-overview.tsx，从 /api/today-overview 拉取（待完成/已完成任务数+专注分钟），心情卡暂占位"即将上线"
+   458→   458→- 首页"功能入口"网格更新：今日任务/错题记录/实时聊天 标"已上线"且点击切对应 nav section；番茄钟入口合并到"今日任务"；其余（每日留言/心情/统计/姐姐后台）仍"即将"
+   459→   459→- Agent Browser 端到端验证（经 Caddy:81）：
+   460→   460→  * 底部 nav 5 tab：首页/错题/任务(新)/聊天/我的，仅"我的"禁用 ✅
+   461→   461→  * 任务 section 完整渲染：录入区(任务名+科目+番茄数+添加)+任务列表(待完成/已完成分组)+番茄钟(圆形进度+时间+开始/重置/跳过) ✅
+   462→   462→  * 创建任务 → 出现在待完成列表 ✅
+   463→   463→  * 设为当前专注 → 任务高亮"专注中" ✅
+   464→   464→  * 番茄钟开始计时：25:00→24:57（3秒递减3秒），按钮变"暂停" ✅
+   465→   465→  * API 模拟完成一段专注：POST focus session 201 + PATCH incPomodoro（0→1）+ today-overview focusMinutes(0→25) ✅
+   466→   466→  * 刷新后 UI 同步：任务进度 1/2 + 番茄钟今日🍅1（VLM 确认）✅
+   467→   467→  * 勾选完成 → 任务移到已完成组 + overview completedTaskCount 0→1 ✅
+   468→   468→  * 删除任务 → AlertDialog 二次确认("删掉这条任务吗？"/"再想想"/"删掉") → 删除成功显示空态 ✅
+   469→   469→  * 首页今日概览接真实数据：显示"今日已完成 1/1 待完成 0 专注分钟 25" ✅
+   470→   470→  * 首页快捷入口"今日任务"点击 → 跳转任务 section ✅
+   471→   471→  * 移动端 390 响应式：布局合理无错位，底部 nav 冻结可见 ✅
+   472→   472→  * 控制台无 error/warn
+   473→   473→- 清理测试数据恢复干净初始态
+   474→   474→
+   475→   475→Stage Summary:
+   476→   476→- Sprint 3 全部交付：今日任务（CRUD+分组+视角化文案）+ 番茄钟（25/5/15 标准番茄法+圆形进度+段完成持久化+任务联动）+ 首页概览接真实数据 + 首页快捷入口激活
+   477→   477→- 底部 nav 从 4 可用变 4 可用（任务替换原番茄占位），首页功能入口 3 个标"已上线"可跳转
+   478→   478→- 工程校验：ESLint 0 error 0 warning，dev:3000 + chat-service:3003 常驻
+   479→   479→- 关键架构：番茄钟 store/组件职责分离（store 持计时纯逻辑+lastCompletedSeq 信号，组件 effect 触发 POST+回调）；任务与番茄钟通过 activeTaskId/onPomodoroComplete 联动
+   480→   480→- 待后续 Sprint：每日留言、心情记录、学习统计、姐姐后台、AI 总结
+   481→   481→
+   482→   482→---
+   483→   483→Task ID: SPRINT-3.1
+   484→   484→Agent: main (Z.ai Code)
+   485→   485→Task: 番茄钟时长可自由设置（默认专注25/短休5/长休15）
+   486→   486→
+   487→   487→Work Log:
+   488→   488→- pomodoro-store 重构：时长从模块常量改为 store 可配置状态（focusMin/shortBreakMin/longBreakMin）+ setDurations/resetDurations actions；用 persist 中间件持久化时长配置（partialize 只存时长，不存计时态）；onRehydrateStorage 校正初始 remainingSec
+   489→   489→  * 默认值常量导出：DEFAULT_FOCUS_MIN=25/DEFAULT_SHORT_BREAK_MIN=5/DEFAULT_LONG_BREAK_MIN=15，LONG_BREAK_EVERY=4 保持不变
+   490→   490→  * 范围校验：专注1-120、短休1-60、长休1-60，clamp 兜底
+   491→   491→  * setDurations 逻辑：idle 时立即同步当前段 remainingSec；running/paused 时不影响当前段，下一段自然生效
+   492→   492→- 新建 src/components/pomodoro/pomodoro-settings.tsx：齿轮按钮 + Dialog，三个数字输入 + 恢复默认 + 保存
+   493→   493→  * 用 key={open} 重挂载表单避免 effect 内 setState（lint 规则）
+   494→   494→  * 校验：非法值显示错误、Dialog 不关闭；长休<短休提示
+   495→   495→- pomodoro-timer.tsx 改造：移除对旧 FOCUS_MIN/SHORT_BREAK_MIN/LONG_BREAK_MIN 常量的导入，改从 store 读取 focusMin/shortBreakMin/longBreakMin；LONG_BREAK_SEC 改为 longBreakMin*60 派生；顶部加 PomodoroSettings 齿轮入口；阶段标签文案用动态值
+   496→   496→- Agent Browser 验证：
+   497→   497→  * 默认 25:00 ✅
+   498→   498→  * 改专注30/短休10/长休15 → 保存 → 时间变 30:00、标签"专注 30 分钟" ✅
+   499→   499→  * 开始计时 → 30:00→29:57（按新时长倒数）✅
+   500→   500→  * 跳过到休息 → 10:00 短休、标签"短休 10 分钟" ✅
+   501→   501→  * 刷新 → 时长配置保留(30:00)、计时态重置(idle) ✅
+   502→   502→  * 恢复默认 → 25/5/15 → 25:00 ✅
+   503→   503→  * 输入 200 → "专注时长 1–120 分钟"校验、Dialog 不关闭 ✅
+   504→   504→  * 控制台无 error
+   505→   505→- 清理 localStorage 恢复默认初始态
+   506→   506→
+   507→   507→Stage Summary:
+   508→   508→- 番茄钟时长完全可自定义：专注/短休/长休 分钟数自由调整，localStorage 持久化，默认 25/5/15
+   509→   509→- 设计：idle 改动立即生效；运行中改动不影响当前段（下一段生效），避免计时混乱
+   510→   510→- 配套：校验（范围+长休≥短休）、恢复默认、齿轮入口集成到番茄钟顶部
+   511→   511→- ESLint 0 error，dev:3000 + chat-service:3003 常驻
+   512→   512→
+   513→   513→---
+   514→   514→Task ID: SPRINT-3.2
+   515→   515→Agent: main (Z.ai Code)
+   516→   516→Task: 首页顶部问候（大标题+副标题）姐姐视角可自由编辑，实时共享
+   517→   517→
+   518→   518→Work Log:
+   519→   519→- Prisma 新增 HomeGreeting 单例模型（id="island-greeting"，heading/subtitle/authorRole/updatedAt），db push
+   520→   520→- 新增 src/lib/greeting-types.ts（HomeGreeting 共享类型）
+   521→   521→- API GET/PUT /api/greeting（upsert 单例；空标题/超60字/超120字/非法 role 校验）
+   522→   522→- chat-service 加 greeting:update → greeting:updated 中继事件（bun --hot 自动重启）
+   523→   523→- chat-socket.ts 契约注释补充 greeting 事件
+   524→   524→- 新建 src/components/home/greeting-editor.tsx：铅笔按钮（仅 role==="sister" 渲染）+ Dialog（标题 Input 60字 + 副标题 Textarea 120字 + 校验 + 保存调 PUT）；key={open} 重挂载避免 effect setState
+   525→   525→- 抽取 src/components/home/home-section.tsx（从 page.tsx 分离 HomeSection）：挂载拉取 greeting（IIFE+cancelled flag 避免 lint）；socket 监听 greeting:updated 实时刷新；无问候回退角色默认文案；显示"姐姐留/妹妹留"标签；GreetingEditor 仅姐姐渲染
+   526→   526→- page.tsx 简化为纯路由
+   527→   527→- Agent Browser 双会话端到端验证：
+   528→   528→  * 妹妹视角：无编辑按钮、显示默认"欢迎回到小岛" ✅
+   529→   529→  * 姐姐视角：编辑按钮出现、显示默认"姐姐，来看看妹妹今天" ✅
+   530→   530→  * 姐姐编辑标题+副标题保存 → 更新 + "姐姐留"标签 ✅
+   531→   531→  * 切回妹妹视角 → 妹妹也看到姐姐写的问候（共享）+ 无编辑按钮 ✅
+   532→   532→  * 双会话实时：姐姐会话B编辑保存 → 妹妹会话A不刷新即时收到新标题 ✅
+   533→   533→  * 副标题实时同步 ✅
+   534→   534→  * 刷新后持久化（数据库）✅
+   535→   535→  * 空标题前端+API双重校验"标题留几个字吧" ✅
+   536→   536→  * VLM 确认视觉：标题/副标题/姐姐留标签/铅笔按钮/语录卡片/玻璃质感 ✅
+   537→   537→  * 控制台无 error
+   538→   538→- 清理测试数据恢复默认初始态
+   539→   539→
+   540→   540→Stage Summary:
+   541→   541→- 首页顶部这块所有文字（大标题+副标题+语录）现在姐姐视角都可自由编辑：
+   542→   542→  * 大标题+副标题：仅姐姐可编辑（GreetingEditor 角色判断），两人共享，实时同步，持久化
+   543→   543→  * 语录：姐姐妹妹都可编辑（Sprint 2.1 已实现）
+   544→   544→- 无自定义问候时回退角色默认文案（姐姐"姐姐，来看看妹妹今天"/妹妹"欢迎回到小岛"）
+   545→   545→- 复用 chat-service socket 通道，零新增服务
+   546→   546→- ESLint 0 error，dev:3000 + chat-service:3003 常驻
+   547→   547→
+   548→   548→---
+   549→   549→Task ID: SPRINT-4-Foundation
+   550→   550→Agent: main (Z.ai Code)
+   551→   551→Task: Sprint 4 地基 —— 心情记录数据层/导航/API/概览集成
+   552→   552→
+   553→   553→Work Log:
+   554→   554→- Prisma 新增 MoodEntry 模型（role/mood/note/createdAt），db push 成功
+   555→   555→- 新增 src/lib/mood-types.ts：MoodEntry 类型 + MOOD_OPTIONS（5 个治愈系心情：calm平静🍃/happy开心☀️/tired有点累🌙/anxious有点焦虑🌧️/sad有点难过💧，每个含 emoji/softBg/textColor/whisper陪伴语）+ getMoodOption + TodayMoodSummary
+   556→   556→- API:
+   557→   557→  * GET /api/moods?date=&role= 返回当日心情列表（createdAt desc）
+   558→   558→  * POST /api/moods {role,mood,note?} 校验 role/mood key，note≤200字
+   559→   559→  * 扩展 GET /api/today-overview 返回 mood 字段（今日最新心情摘要，无则 null）
+   560→   560→- task-types.ts: TodayOverviewData 加 mood 字段
+   561→   561→- nav-store: NavTab 加 "mood"
+   562→   562→- page.tsx: activeTab==="mood" 渲染 MoodSection
+   563→   563→- 首页快捷入口"心情记录"激活（available=true, navTab="mood"）
+   564→   564→- today-overview.tsx: mood 卡接真实数据（emoji+label），mood 卡不用 font-num（含 emoji 中文），FALLBACK 加 mood:null
+   565→   565→- 创建 stub src/components/mood/mood-section.tsx（待子代理填充）
+   566→   566→- 重启 dev server 加载新 Prisma client，curl 验证 /api/moods 与 /api/today-overview 正常
+   567→   567→- ESLint 0 error
+   568→   568→
+   569→   569→Stage Summary:
+   570→   570→- 地基就绪：心情数据层、2 个 API、导航激活、首页概览 mood 卡接真实数据、快捷入口激活
+   571→   571→- 待子代理：mood-section.tsx（心情选择器 + 备注 + 今日历史时间线）
+   572→   572→- 共享契约（供子代理）：
+   573→   573→  * 类型: import { MoodEntry, MOOD_OPTIONS, MoodOption, getMoodOption, CreatorRole } from "@/lib/mood-types"
+   574→   574→  * 当前身份: useUserStore(s=>s.currentUser).role => "sister"|"younger"
+   575→   575→  * API: GET /api/moods?date=YYYY-MM-DD -> {entries:MoodEntry[]}; POST /api/moods {role,mood,note?} -> {ok,entry}
+   576→   576→  * MOOD_OPTIONS: 5 项，每项 {key,label,emoji,softBg,textColor,whisper}
+   577→   577→  * 玻璃卡: GlassCard; shadcn/ui 在 src/components/ui/
+   578→   578→  * 今日日期串: new Date() 本地时区拼 "YYYY-MM-DD"
+   579→   579→  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促，文件<500行单职责，TS严格无any
+   580→   580→
+   581→   581→---
+   582→   582→Task ID: 4-a
+   583→   583→Agent: full-stack-developer (mood UI)
+   584→   584→Task: 心情记录 UI（选择器 + 备注 + 今日时间线）
+   585→   585→
+   586→   586→Work Log:
+   587→   587→- 通读 worklog.md（Sprint 1/2/3 + 2-a/2-b/2.1/2.2）、mood-types.ts、mood API route、glass-card、mistake-section（参考 section 容器范式）、today-overview（确认首页心情卡消费 /api/today-overview，与本模块解耦）、user-store、use-toast、button/textarea，确认共享契约与设计铁律
+   588→   588→- 覆盖 src/components/mood/mood-picker.tsx：
+   589→   589→  * GlassCard(strong + sheen) 内 5 列网格心情选项（grid-cols-5），每项 emoji + label，role=radiogroup/radio + aria-checked
+   590→   590→  * 选中高亮用 MOOD_OPTIONS 的 softBg + textColor（leaf-soft/amber-50/stone-100/slate-100/sky-50 治愈浅色，非蓝紫色块）；未选为玻璃白底 muted
+   591→   591→  * AnimatePresence + motion height auto 展开 whisper 陪伴语（softBg 底）+ 备注 Textarea（maxLength 200，视角化 placeholder）+ 字数计数（.font-num）+ "记下来"按钮
+   592→   592→  * 提交：POST /api/moods { role, mood, note? }，成功 → toast"记下来啦" + 清空 selectedKey/note + onRecorded() 回调；提交中 Loader2 旋转 + 禁用
+   593→   593→  * 视角化：heading 妹妹"选一个今天的心情"/姐姐"你也记一笔吧"；placeholder 妹妹"想说点什么就写下来…"/姐姐"想给妹妹留句话也可以…"
+   594→   594→  * 错误：取 API 返回的 error 文案（"选一个心情吧"/"不知道是谁的心情"），兜底"网络似乎抖了一下，再试一次看看"
+   595→   595→- 新建 src/components/mood/mood-timeline.tsx：
+   596→   596→  * GET /api/moods?date=today，cancelled-flag 模式（effect 内 async IIFE + cancelled 守卫，finally 里 if(!cancelled) setState + onLoaded）
+   597→   597→  * refreshKey 变化触发重新拉取；onLoaded 回调供父级关闭刷新按钮态
+   598→   598→  * 列表 GlassCard(pad=none) 内 ul + max-h-[40vh] overflow-y-auto + divide-y，每条 emoji 圆徽章 + label(textColor) + 记录者标签(姐姐/妹妹) + 相对时间(刚刚/X分钟前，.font-num) + 备注(whitespace-pre-wrap)
+   599→   599→  * 加载态：3 个 Skeleton h-16；空态：🌿 圆徽章 + 视角化文案（妹妹"今天还没记心情，选一个吧"/姐姐"妹妹还没记心情，也许今天她很平静"）；错误态：destructive/30 边框条
+   600→   600→  * 防御：getMoodOption 未命中时 fallback 🍃 + 原始 key + muted 文字色
+   601→   601→  * framer-motion 列表项 opacity+y 入场，delay 阶梯 0.03s 封顶 0.2s
+   602→   602→  * 标题"今日心情 N 条"，N 用 .font-num tabular-nums
+   603→   603→- 覆盖 src/components/mood/mood-section.tsx（原 stub）：
+   604→   604→  * section 容器：header(GlassCard 外) + MoodPicker + MoodTimeline
+   605→   605→  * header：Heart(leaf) 图标 + "心情记录"标题 + 视角化副标题（妹妹"今天感觉怎么样？记下来，慢慢懂自己。"/姐姐"看看妹妹今天的心情，不强求，她愿意说就说。"）+ 刷新按钮(ghost，RefreshCw 旋转态)
+   606→   606→  * refreshKey state：MoodPicker onRecorded → +1；刷新按钮 → +1 + setRefreshing(true)；MoodTimeline onLoaded → setRefreshing(false)
+   607→   607→  * role 从 useUserStore 取，as CreatorRole
+   608→   608→- 校验：bun run lint 通过（0 error 0 warning，exit 0）
+   609→   609→- 端到端冒烟（curl，经 :3000）：
+   610→   610→  * GET /api/moods?date=2026-07-03 → 200 { entries: [] }
+   611→   611→  * POST /api/moods {younger, calm, "冒烟测试一下"} → 201 { ok:true, entry:{...} }
+   612→   612→  * GET 复查 → 200，新条目在列表首位（createdAt desc 生效）
+   613→   613→  * POST 非法 mood "unknown" → 400 { ok:false, error:"选一个心情吧" }
+   614→   614→  * POST 非法 role "mom" → 400 { ok:false, error:"不知道是谁的心情" }
+   615→   615→  * 清理测试数据：db.moodEntry.deleteMany({})，remaining: 0
+   616→   616→- dev.log 复查：MoodEntry Prisma query 正常执行（today-overview 触发），无编译错误
+   617→   617→
+   618→   618→Stage Summary:
+   619→   619→- 产物（3 个文件，严格遵守 task 范围）：
+   620→   620→  * src/components/mood/mood-picker.tsx（心情选择器 + 备注 + 提交，约 200 行）
+   621→   621→  * src/components/mood/mood-timeline.tsx（今日时间线 + 空态/加载/错误，约 180 行）
+   622→   622→  * src/components/mood/mood-section.tsx（section 容器，覆盖原 stub，约 85 行）
+   623→   623→- 关键决策：
+   624→   624→  * 状态管理：useState + fetch（项目未配 QueryClientProvider，遵循"先用简单的 useState + fetch"）；effect 用 cancelled-flag 模式满足 lint 与卸载安全
+   625→   625→  * 通信：MoodSection 维护 refreshKey，picker 提交成功 / 点刷新 → +1 → timeline refetch；timeline onLoaded 回调关闭 section 刷新按钮态（避免无回调的 setTimeout 黑魔法）
+   626→   626→  * 心情高亮：直接用 MOOD_OPTIONS 的 softBg + textColor（已是治愈浅色，不算违规色块）；未选为 bg-background/40 玻璃白
+   627→   627→  * Tailwind v4 自动内容检测：MOOD_OPTIONS 的字面量 class（bg-leaf-soft/50 等）在 src/lib/mood-types.ts 中以字符串字面量出现，会被扫描器识别，无需 safelist
+   628→   628→  * 视角化覆盖：heading / placeholder / 副标题 / 空态文案 全部按 sister/younger 分支，姐姐也能记自己的心情（主用途仍是妹妹记录、姐姐查看）
+   629→   629→  * a11y：radiogroup/radio + aria-checked；aria-label；sr-only 不需要（无 Dialog）；focus-visible:ring
+   630→   630→  * 单职责：picker 只管选+提交，timeline 只管展示+拉取，section 只管编排 + refreshKey
+   631→   631→- 已知事项：
+   632→   632→  * 首页"当前心情"卡（today-overview）与本模块解耦：用户在 mood section 记录后切回首页，HomeSection 重新 mount 会重新 fetch /api/today-overview，自动反映最新心情（task spec 允许的简单方案，未做跨 section 实时通信）
+   633→   633→  * 时间线仅展示今日（date=today）；跨日查看不在本 task 范围
+   634→   634→  * 无删除/编辑心情入口（task 未要求，记录即陪伴，删掉反而不符合"留下也是一种记录"的气质）
+   635→   635→- 文案样例（陪伴向，无催促）：
+   636→   636→  * 副标题："今天感觉怎么样？记下来，慢慢懂自己。" / "看看妹妹今天的心情，不强求，她愿意说就说。"
+   637→   637→  * heading："选一个今天的心情" / "你也记一笔吧"
+   638→   638→  * placeholder："想说点什么就写下来…" / "想给妹妹留句话也可以…"
+   639→   639→  * whisper（直接复用 MOOD_OPTIONS）："稳稳的，这样就很棒。" / "今天有好事呢，姐姐也替你开心。" / "累了就歇会儿，岛上的风很温柔。" / "不安也没关系，慢慢深呼吸。" / "难过的时候，姐姐一直都在。"
+   640→   640→  * 空态："今天还没记心情，选一个吧" / "妹妹还没记心情，也许今天她很平静"
+   641→   641→  * 提交："记下来啦" / 提交中"记着呢…"
+   642→   642→  * 错误："心情暂时打不开，稍等一下再试" / "网络似乎抖了一下，再试一次看看"
+   643→   643→
+   644→   644→---
+   645→   645→Task ID: SPRINT-4-Integration
+   646→   646→Agent: main (Z.ai Code)
+   647→   647→Task: Sprint 4 集成 + 端到端自检 + 概览 mood 卡接真实数据
+   648→   648→
+   649→   649→Work Log:
+   650→   650→- 今日概览 mood 卡接真实数据：/api/today-overview 返回今日最新心情摘要，today-overview.tsx 显示 "emoji + label"，mood 卡不用 font-num（含 emoji 中文）
+   651→   651→- 首页快捷入口"心情记录"激活，点击切到 mood section
+   652→   652→- Agent Browser 端到端验证（经 Caddy:81）：
+   653→   653→  * 首页快捷入口"心情记录" → 进入心情板块 ✅
+   654→   654→  * 5 个心情选项渲染（平静🍃/开心☀️/有点累🌙/有点焦虑🌧️/有点难过💧，radio 形式）✅
+   655→   655→  * 选"开心" → 展开 whisper 陪伴语"今天有好事呢" + 备注 textbox + "记下来"按钮 ✅
+   656→   656→  * 填备注 + 提交 → toast"记下来啦" + 时间线出现 1 条 + 选择清空 ✅
+   657→   657→  * 时间线含 emoji/label/记录者标签/相对时间/备注 ✅
+   658→   658→  * 切回首页 → 概览 mood 卡显示"☀️ 开心" + 提示 ✅
+   659→   659→  * 再记一条"有点累" → 时间线 2 条，最新在前 ✅
+   660→   660→  * VLM 确认视觉：5 选项带 emoji、时间线最新在前、每条含 emoji/标签/时间/备注、配色奶白浅绿无蓝紫 ✅
+   661→   661→  * API 校验：非法 mood → "选一个心情吧"；非法 role → "不知道是谁的心情" ✅
+   662→   662→  * 移动端 390 + 桌面端 1280 响应式 ✅
+   663→   663→  * 控制台无 error
+   664→   664→- 清理测试数据恢复干净初始态
+   665→   665→
+   666→   666→Stage Summary:
+   667→   667→- Sprint 4 全部交付：心情记录（5 治愈系心情 + 备注 + 今日时间线）+ 首页概览 mood 卡接真实数据 + 快捷入口激活
+   668→   668→- 设计：心情选项用"有点累/有点焦虑/有点难过"软化负面标签；whisper 陪伴语；记录者标签让姐姐能看到妹妹心情（陪伴而非监督）
+   669→   669→- 入口：首页快捷入口（底部 nav 5 位已满，心情通过快捷入口进入）
+   670→   670→- 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
+   671→   671→- 待后续 Sprint：每日留言、学习统计、姐姐后台、AI 总结
+   672→   672→
+   673→   673→---
+   674→   674→Task ID: SPRINT-5-Foundation
+   675→   675→Agent: main (Z.ai Code)
+   676→   676→Task: Sprint 5 地基 —— 每日留言数据层/导航/API
+   677→   677→
+   678→   678→Work Log:
+   679→   679→- Prisma 新增 DailyNote 模型（authorRole/content/noteDate "YYYY-MM-DD"/createdAt），db push 成功
+   680→   680→- 新增 src/lib/note-types.ts（DailyNote + CreatorRole 共享类型）
+   681→   681→- API GET /api/notes?date=YYYY-MM-DD（默认今天，createdAt asc 早写的在前）+ POST /api/notes {authorRole,content,noteDate?}（校验 role/空内容/500字）
+   682→   682→- nav-store: NavTab 加 "notes"
+   683→   683→- page.tsx: activeTab==="notes" 渲染 NoteSection
+   684→   684→- 首页快捷入口"每日留言"激活（available=true, navTab="notes"）
+   685→   685→- 创建 stub src/components/notes/note-section.tsx（待子代理填充）
+   686→   686→- 重启 dev server 加载新 Prisma client，curl 验证 /api/notes 返回 {notes:[],date:today}
+   687→   687→- ESLint 0 error
+   688→   688→
+   689→   689→Stage Summary:
+   690→   690→- 地基就绪：每日留言数据层、API、导航激活、快捷入口激活
+   691→   691→- 待子代理：notes-section.tsx（留言录入 + 当日列表 + 日期切换查看往日）
+   692→   692→- 共享契约（供子代理）：
+   693→   693→  * 类型: import type { DailyNote, CreatorRole } from "@/lib/note-types"
+   694→   694→  * 当前身份: useUserStore(s=>s.currentUser).role => "sister"|"younger"
+   695→   695→  * API: GET /api/notes?date=YYYY-MM-DD -> {notes:DailyNote[], date:string}; POST /api/notes {authorRole,content,noteDate?} -> {ok,note}
+   696→   696→  * 玻璃卡: GlassCard; shadcn/ui 在 src/components/ui/; date-fns 已装可用
+   697→   697→  * 今日日期串: new Date() 本地时区拼 "YYYY-MM-DD"
+   698→   698→  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促，文件<500行单职责，TS严格无any
+   699→   699→
+   700→   700→---
+   701→   701→Task ID: 5-a
+   702→   702→Agent: full-stack-developer (notes UI)
+   703→   703→Task: 每日留言 UI（录入 + 当日列表 + 日期切换）
+   704→   704→
+   705→   705→Work Log:
+   706→   706→- 通读 worklog.md（Sprint 1-4 + 2-a/2-b/3-a/3-b/4-a 全程）、note-types.ts、notes API（route.ts）、user-store、GlassCard、mood-section/picker/timeline（最近一个 section 范式参考）、use-toast、button/textarea/skeleton、globals.css（leaf/leaf-soft/cream 语义色 + .font-num + .glass-strong + .glass-sheen）、page.tsx（确认 NoteSection 已接入 activeTab==="notes"）、package.json（确认 date-fns 4.1.0 已装）、agent-ctx 3-a/3-b 记录
+   707→   707→- 新建 src/components/notes/note-date-nav.tsx（约 90 行）：
+   708→   708→  * GlassCard(cream/20 底) 内三段式布局：左前一天 / 中日期展示+回到今天 / 右后一天
+   709→   709→  * date-fns format(d, "M月d日 EEEE", {locale:zhCN}) 渲染"7月3日 周五"；isToday 时前缀"今天 · "
+   710→   710→  * 前一天按钮始终可用（可回看往日留言）
+   711→   711→  * 回到今天按钮：isToday(currentDate) 时禁用
+   712→   712→  * 后一天按钮：isToday || isFuture 时禁用（不能给未来留言）
+   713→   713→  * 全部 ghost + rounded-full icon button，CalendarDays leaf 色图标
+   714→   714→- 新建 src/components/notes/note-composer.tsx（约 120 行）：
+   715→   715→  * GlassCard(strong + sheen + lg pad)
+   716→   716→  * Textarea 自适应（min-h-96px resize-y），maxLength 500，rows 3
+   717→   717→  * 字数计数 .font-num tabular-nums，超限标 destructive 色（防御性）
+   718→   718→  * "留下"按钮（Send 图标）：POST /api/notes {authorRole, content}，成功→toast"小纸条已经留下啦"+清空+onSubmitted；提交中"留着呢…"+Loader2 旋转+禁用
+   719→   719→  * 空内容/提交中/超限三重禁用（canSubmit）
+   720→   720→  * 视角化 placeholder（姐姐"想给妹妹留句话…"/妹妹"想对姐姐说什么，写下来…"）
+   721→   721→  * 错误取 API 返回 error 文案，兜底"网络似乎抖了一下，再试一次看看"
+   722→   722→- 新建 src/components/notes/note-list.tsx（约 180 行）：
+   723→   723→  * GET /api/notes?date=YYYY-MM-DD，cancelled-flag 模式（effect 内 async IIFE + cancelled 守卫 + finally 调 onLoaded），依赖 [refreshKey, currentDate, onLoaded]
+   724→   724→  * dateToStr 本地时区拼 YYYY-MM-DD
+   725→   725→  * 便签纸风格卡片：rounded-xl + shadow-sm + border-white/40 + 治愈浅色底（STICKY_BG 字面量 Record：sister→leaf-soft/40，younger→cream/50，Tailwind v4 内容扫描识别）
+   726→   726→  * 自己留的靠右（justify-end），对方留的靠左（justify-start），max-w-[85%] sm:max-w-[78%]
+   727→   727→  * 正文 whitespace-pre-wrap break-words + text-foreground/90（全局宋体生效）
+   728→   728→  * 底部作者标签（white/50 圆角小标签）+ 时间（今天视图"刚刚/X分钟前/X小时前"，往日"HH:mm"）
+   729→   729→  * 状态分支：error 条 / loading Skeleton×3 / empty（GlassCard cream/20 + StickyNote 圆徽章 + 视角化文案）/ normal
+   730→   730→  * max-h-[50vh] overflow-y-auto，framer-motion layout + opacity+y 入场（delay 阶梯 0.03s 封顶 0.2s）
+   731→   731→  * 空态文案：今天"还没留言，给彼此留张小纸条吧"；往日"这天没有留言"
+   732→   732→- 覆盖 src/components/notes/note-section.tsx（原 10 行 stub → 约 115 行）：
+   733→   733→  * section 容器：header（GlassCard 外）+ NoteDateNav + NoteComposer（仅 todayView 时）+ NoteList
+   734→   734→  * header：StickyNote(leaf) 图标 + "每日留言"标题 + 视角化副标题 + 刷新按钮（ghost + RefreshCw 旋转态）
+   735→   735→  * currentDate state（Date，默认 new Date()）+ refreshKey + refreshing
+   736→   736→  * todayView = isToday(currentDate)，决定 Composer 是否渲染 + NoteList 空态文案 + 时间显示格式
+   737→   737→  * 副标题：姐姐"给妹妹留句话，慢慢说，不急。"/妹妹"给姐姐留张小纸条，她打开就能看到。"
+   738→   738→- 校验：bun run lint → 0 error 0 warning exit 0（移除一处多余的 eslint-disable 后干净）
+   739→   739→- API 冒烟（curl 经 :3000）：
+   740→   740→  * GET /api/notes?date=2026-07-03 → 200 {notes:[], date:"2026-07-03"}
+   741→   741→  * POST /api/notes {younger,"冒烟测试：给姐姐留张小纸条"} → 201 {ok:true, note:{id,authorRole,content,noteDate,createdAt}}
+   742→   742→  * GET 复查 → 列表含新条目，createdAt asc 生效
+   743→   743→  * 清理：bun 直接 prisma deleteMany content LIKE "冒烟测试" → deleted 1，列表回归空
+   744→   744→- dev.log 复查：GET /api/notes 200、POST /api/notes 201，无编译错误
+   745→   745→- agent-ctx 工作记录：/home/z/my-project/agent-ctx/5-a-full-stack-developer-notes-ui.md（项目根 agent-ctx 目录可写，3-a 报告的 /agent-ctx 路径权限问题已不存在）
+   746→   746→
+   747→   747→Stage Summary:
+   748→   748→- 产物（4 个允许文件，全部 < 500 行，单职责）：
+   749→   749→  * src/components/notes/note-date-nav.tsx（约 90 行，日期切换）
+   750→   750→  * src/components/notes/note-composer.tsx（约 120 行，留言录入）
+   751→   751→  * src/components/notes/note-list.tsx（约 180 行，当日列表 + 便签纸风格 + 状态分支）
+   752→   752→  * src/components/notes/note-section.tsx（约 115 行，覆盖原 stub，section 容器编排）
+   753→   753→- 关键决策：
+   754→   754→  * 状态管理：useState + fetch（沿用 mood/tasks 范式，无 QueryClientProvider）
+   755→   755→  * effect cancelled-flag 模式满足 lint + 卸载安全
+   756→   756→  * 日期切换：currentDate 由 NoteSection 维护，NoteDateNav onChange → setCurrentDate → NoteList 按 currentDate 重新 fetch
+   757→   757→  * "今天"边界：isToday + isFuture 双重判定，后一天按钮在"今天或未来"禁用（不能给未来留言），今天按钮 isToday 时禁用，前一天始终可用
+   758→   758→  * 仅今天可写：NoteComposer 仅 isToday(currentDate) 时渲染（往日只读，符合"每日"语义）
+   759→   759→  * 提交刷新链路：NoteComposer onSubmitted → setRefreshKey(+1) → NoteList 重新 fetch；NoteSection 刷新按钮同理；NoteList onLoaded 回调关闭 section 刷新按钮态
+   760→   760→  * 便签纸风格：治愈浅色底（leaf-soft/40 姐姐 + cream/50 妹妹）+ rounded-xl + shadow-sm + border-white/40，字面量 class 写在 Record 里供 Tailwind v4 扫描
+   761→   761→  * 左右区分：自己留的 justify-end + ml-auto，对方留的 justify-start + mr-auto；max-w-[85%] sm:max-w-[78%]
+   762→   762→  * 时间显示：今天视图相对时间（刚刚/X分钟前/X小时前），往日视图 HH:mm
+   763→   763→  * a11y：aria-label 全覆盖（留言内容/留下小纸条/前一天/后一天/回到今天/刷新当日留言）
+   764→   764→- 文案样例（陪伴向，无催促）：
+   765→   765→  * 副标题："给妹妹留句话，慢慢说，不急。" / "给姐姐留张小纸条，她打开就能看到。"
+   766→   766→  * placeholder："想给妹妹留句话…" / "想对姐姐说什么，写下来…"
+   767→   767→  * 提交 toast："小纸条已经留下啦" / 提交中"留着呢…"
+   768→   768→  * 空态："还没留言，给彼此留张小纸条吧" / "这天没有留言"
+   769→   769→  * 错误："小纸条暂时打不开，稍等一下再试" / "网络似乎抖了一下，再试一次看看"
+   770→   770→- 工程校验：ESLint 0 error 0 warning，dev server `GET / 200`、`GET /api/notes 200`、`POST /api/notes 201`
+   771→   771→- ⚠️ 已知事项：
+   772→   772→  * 无编辑/删除留言入口（task 未要求，"留下也是一种记录"，符合慢沟通气质）
+   773→   773→  * 暂无实时推送（姐姐留言后妹妹需手动刷新；与 chat 不同，每日留言是慢沟通，不强求实时）
+   774→   774→  * 长列表 max-h-[50vh] + 全局自定义滚动条（globals.css 已就绪）
+   775→   775→
+   776→   776→---
+   777→   777→Task ID: SPRINT-5-Integration
+   778→   778→Agent: main (Z.ai Code)
+   779→   779→Task: Sprint 5 集成 + 端到端自检
+   780→   780→
+   781→   781→Work Log:
+   782→   782→- Agent Browser 端到端验证（经 Caddy:81）：
+   783→   783→  * 首页快捷入口"每日留言" → 进入留言板块 ✅
+   784→   784→  * 板块渲染：标题 + 日期切换(前一天/回到今天[今天禁用]/后一天[未来禁用]) + 录入区(textarea+留下[空禁用]) + 列表(0张) ✅
+   785→   785→  * 妹妹留一张纸条（带备注）→ 留下按钮启用 → 提交 → 便签出现（含内容/作者标签/时间"刚刚"）✅
+   786→   786→  * VLM 确认：录入区 + 1张便签 + 日期切换 + 便签纸浅色风格 + 配色合规 ✅
+   787→   787→  * 日期切换：前一天 → 录入区隐藏(往日只读) + 空态"没有留言" + 回到今天启用 ✅
+   788→   788→  * 回到今天 → 录入区恢复 + 之前的留言仍在 ✅
+   789→   789→  * 切姐姐视角 → 看到妹妹的纸条 → 姐姐也留一张 → 两条都显示 ✅
+   790→   790→  * VLM 确认：两条便签左右区分（妹妹靠左/姐姐靠右）+ 每张含内容/作者/时间 + 便签纸浅色风格 ✅
+   791→   791→  * API 校验：空内容→"留句话再走呀"；非法role→"不知道是谁留的" ✅
+   792→   792→  * 移动端 390 + 桌面端 1280 响应式 ✅
+   793→   793→  * 控制台无 error
+   794→   794→- 清理测试数据恢复干净初始态
+   795→   795→
+   796→   796→Stage Summary:
+   797→   797→- Sprint 5 全部交付：每日留言（慢沟通小纸条 + 日期归档 + 往日只读 + 便签纸风格左右区分）
+   798→   798→- 设计：区别于实时聊天的快沟通，每日留言是深思熟虑的鼓励；往日只读符合"每日"语义；便签纸浅色(leaf-soft/cream)治愈系
+   799→   799→- 入口：首页快捷入口（底部 nav 5 位已满）
+   800→   800→- 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
+   801→   801→- 待后续 Sprint：学习统计、姐姐后台、AI 总结
+   802→   802→
+   803→   803→---
+   804→   804→Task ID: SPRINT-6-Foundation
+   805→   805→Agent: main (Z.ai Code)
+   806→   806→Task: Sprint 6 地基 —— 学习统计数据层/导航/API
+   807→   807→
+   808→   808→Work Log:
+   809→   809→- 新增 src/lib/stats-types.ts：StatsData 聚合类型（totalFocusMinutes/totalPomodoros/totalMistakes/activeDays + dailyFocus[] + weeklyCompletedTasks/Pending + moodDistribution[] + subjectDistribution[]）
+   810→   810→- API GET /api/stats 聚合：累计专注分钟/番茄/错题/坚持天数（有focus的不同日期数）+ 近7天每日专注趋势 + 近7天任务完成 + 近7天心情分布 + 近7天科目分布（任务+错题）
+   811→   811→- nav-store: NavTab 加 "stats"
+   812→   812→- page.tsx: activeTab==="stats" 渲染 StatsSection
+   813→   813→- 首页快捷入口"学习统计"激活
+   814→   814→- 创建 stub src/components/stats/stats-section.tsx（待子代理填充）
+   815→   815→- 造近7天演示数据（13个focus session、4个任务、3个错题、4个心情）验证 API 聚合正确
+   816→   816→- 重启 dev server，curl 验证 /api/stats 返回完整聚合
+   817→   817→- ESLint 0 error
+   818→   818→
+   819→   819→Stage Summary:
+   820→   820→- 地基就绪：统计聚合 API（7维度）、导航激活、快捷入口激活、演示数据已造
+   821→   821→- 待子代理：stats-section.tsx（概览数字卡 + 专注趋势柱状图 + 任务完成 + 心情分布色块 + 科目分布）
+   822→   822→- 共享契约（供子代理）：
+   823→   823→  * 类型: import type { StatsData, DailyFocusStat, MoodStatItem, SubjectStatItem } from "@/lib/stats-types"
+   824→   824→  * API: GET /api/stats -> StatsData（直接返回对象，非包裹）
+   825→   825→  * 图表库: recharts 已装（import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts"）
+   826→   826→  * 玻璃卡: GlassCard; shadcn/ui 在 src/components/ui/
+   827→   827→  * 心情 emoji/label: moodDistribution 已含 emoji+label
+   828→   828→  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促（看坚持不排名），文件<500行单职责，TS严格无any
+   829→   829→  * 图表配色: 用 leaf 系（var(--leaf)）+ 治愈浅色，禁蓝紫；可用 ["#7aa881","#a8c9a0","#d4e4cf","#b8a890","#9bb5a8"] 这类治愈色系
+   830→   830→

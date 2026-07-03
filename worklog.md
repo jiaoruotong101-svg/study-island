@@ -799,3 +799,138 @@ Stage Summary:
 - 入口：首页快捷入口（底部 nav 5 位已满）
 - 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
 - 待后续 Sprint：学习统计、姐姐后台、AI 总结
+
+---
+Task ID: SPRINT-6-Foundation
+Agent: main (Z.ai Code)
+Task: Sprint 6 地基 —— 学习统计数据层/导航/API
+
+Work Log:
+- 新增 src/lib/stats-types.ts：StatsData 聚合类型（totalFocusMinutes/totalPomodoros/totalMistakes/activeDays + dailyFocus[] + weeklyCompletedTasks/Pending + moodDistribution[] + subjectDistribution[]）
+- API GET /api/stats 聚合：累计专注分钟/番茄/错题/坚持天数（有focus的不同日期数）+ 近7天每日专注趋势 + 近7天任务完成 + 近7天心情分布 + 近7天科目分布（任务+错题）
+- nav-store: NavTab 加 "stats"
+- page.tsx: activeTab==="stats" 渲染 StatsSection
+- 首页快捷入口"学习统计"激活
+- 创建 stub src/components/stats/stats-section.tsx（待子代理填充）
+- 造近7天演示数据（13个focus session、4个任务、3个错题、4个心情）验证 API 聚合正确
+- 重启 dev server，curl 验证 /api/stats 返回完整聚合
+- ESLint 0 error
+
+Stage Summary:
+- 地基就绪：统计聚合 API（7维度）、导航激活、快捷入口激活、演示数据已造
+- 待子代理：stats-section.tsx（概览数字卡 + 专注趋势柱状图 + 任务完成 + 心情分布色块 + 科目分布）
+- 共享契约（供子代理）：
+  * 类型: import type { StatsData, DailyFocusStat, MoodStatItem, SubjectStatItem } from "@/lib/stats-types"
+  * API: GET /api/stats -> StatsData（直接返回对象，非包裹）
+  * 图表库: recharts 已装（import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts"）
+  * 玻璃卡: GlassCard; shadcn/ui 在 src/components/ui/
+  * 心情 emoji/label: moodDistribution 已含 emoji+label
+  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促（看坚持不排名），文件<500行单职责，TS严格无any
+  * 图表配色: 用 leaf 系（var(--leaf)）+ 治愈浅色，禁蓝紫；可用 ["#7aa881","#a8c9a0","#d4e4cf","#b8a890","#9bb5a8"] 这类治愈色系
+
+---
+Task ID: 6-a
+Agent: full-stack-developer (stats UI)
+Task: 学习统计 UI（概览数字 + 专注趋势图 + 心情分布 + 科目分布）
+
+Work Log:
+- 通读 worklog.md（Sprint 1-5 + Sprint 6 地基）、stats-types.ts、stats API route.ts、user-store、GlassCard、mood-section/mood-timeline（最近 section 范式参考）、today-overview（4卡 grid 范式）、globals.css（leaf/leaf-soft/cream 语义色 + .font-num + glass-strong + 自定义滚动条）、page.tsx（确认 StatsSection 已接入 activeTab==="stats"）、agent-ctx 3-a/3-b/5-a 记录
+- 新建 src/components/stats/stats-overview-cards.tsx（约 120 行）：
+  * 4 张 GlassCard 网格 grid-cols-2 sm:grid-cols-4
+  * 累计专注（Timer）/完成番茄（Apple）/坚持天数（CalendarCheck）/错题积累（BookX）
+  * 大数字 .font-num tabular-nums + 单位（分钟/个/天/道）+ 陪伴向小语
+  * loading 时显示 Skeleton（h-8 w-24）
+  * framer-motion opacity+y 入场（delay 0.06s 阶梯）
+- 新建 src/components/stats/focus-trend-chart.tsx（约 145 行）：
+  * recharts BarChart + XAxis（周一~周日）+ YAxis（focusMinutes）+ 自定义 Tooltip
+  * 普通柱 #7aa881（leaf），今日柱 #5f9a6c（深 leaf 高亮）
+  * Tooltip："周X / 专注 N 分钟 / X 个番茄"（番茄仅 >0 时显示）
+  * 全 0 时显示空态 🌱 + "这周还没开始专注，不急"
+  * 加载 Skeleton h-[240px]；固定高度容器避免 ResponsiveContainer 0 高度
+  * tick 文字色用 [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground className 覆盖（暗黑模式自适应）
+- 新建 src/components/stats/mood-distribution.tsx（约 115 行）：
+  * 不用 PieChart，改横向列表 + 占比条（避免色块太多显乱）
+  * 每项：emoji 圆徽 + label + 次数（.font-num tabular-nums）+ 占比条
+  * 占比条宽度 = count/total*100，颜色按 mood key 映射治愈浅色（leaf/amber-300/stone-300/slate-300/sky-200，与 MOOD_OPTIONS softBg 同色系）
+  * 空数据（数组为空）显示 🌿 + "这周还没记心情，慢慢来"
+  * 加载 Skeleton×3
+- 新建 src/components/stats/subject-distribution.tsx（约 95 行）：
+  * 列表（divide-y），每行：科目名 + 任务 pill（ListChecks + N）+ 错题 pill（BookX + N）
+  * 任务 pill 用 leaf-soft/40 leaf 文字色；错题 pill 用 cream/60 foreground/70
+  * 数字 .font-num tabular-nums；aria-label 完整描述
+  * 空数据（数组为空）显示 📒 + "这周还没记任务或错题，慢慢来"
+  * 长列表 max-h-[50vh] overflow-y-auto（自定义滚动条全局已就绪）
+- 覆盖 src/components/stats/stats-section.tsx（原 10 行 stub → 约 130 行）：
+  * section 容器：header（GlassCard 外）+ StatsOverviewCards + FocusTrendChart + 两列网格（MoodDistribution | SubjectDistribution）
+  * header：BarChart3(leaf) 图标 + "学习统计"标题 + 视角化副标题 + 刷新按钮（ghost + RefreshCw 旋转态）
+  * 一次 fetch /api/stats，持有完整 StatsData，按 slice 传给子组件（避免 4 个子组件各自 fetch 同一 endpoint）
+  * cancelled-flag 模式 effect，依赖 [refreshKey]
+  * loading 传给所有子组件展示各自 Skeleton；error 顶部条带提示
+  * 副标题：妹妹"看看这段时间的坚持，每一分钟都算数" / 姐姐"陪她走过的这段路"
+- 校验：bun run lint → 0 error 0 warning exit 0（两次跑均干净）
+- API 冒烟（curl 经 :3000）：
+  * GET /api/stats → 200，返回完整 StatsData（含 dailyFocus 7 项 / moodDistribution 4 项 / subjectDistribution 4 项）
+  * 数据形态与子组件 props 完全匹配
+- dev.log 复查：GET /api/stats 200（首次 compile 2.9s 后续 5-54ms）、✓ Compiled 多次无错误、stats 页面编译通过
+
+Stage Summary:
+- 产物（5 个允许文件，全部 < 500 行，单职责）：
+  * src/components/stats/stats-overview-cards.tsx（约 120 行，4 张累计数字卡 + Skeleton）
+  * src/components/stats/focus-trend-chart.tsx（约 145 行，recharts 柱状图 + 今日高亮 + 空态/加载态）
+  * src/components/stats/mood-distribution.tsx（约 115 行，横向列表 + 占比条 + 空态/加载态）
+  * src/components/stats/subject-distribution.tsx（约 95 行，科目行 + 任务/错题 pill + 空态/加载态）
+  * src/components/stats/stats-section.tsx（约 130 行，覆盖原 stub，section 容器编排 + 一次 fetch）
+- 关键决策：
+  * 单 endpoint 单 fetch：/api/stats 一次返回完整 StatsData，父级 StatsSection 持有 data + loading，按 slice 传给 4 个子组件（避免 4 次同 endpoint 重复请求）
+  * effect cancelled-flag 模式满足 lint + 卸载安全（let cancelled=false; void (async()=>{...if(!cancelled)setX(...)})(); return ()=>{cancelled=true}）
+  * 视角化副标题：妹妹"看看这段时间的坚持，每一分钟都算数" / 姐姐"陪她走过的这段路"
+  * 图表配色：leaf #7aa881 + 深 leaf #5f9a6c（今日柱）治愈色，禁蓝紫；tick 文字色用 className 覆盖 fill-muted-foreground 自适应暗黑
+  * 心情分布占比条：按 mood key 映射治愈浅色（与 MOOD_OPTIONS softBg 同色系），fallback leaf-soft
+  * 心情分布不用 PieChart（task spec 明确，避免 5 色块太乱），改横向列表 + 占比条
+  * 科目分布用 pill 风格（leaf-soft 任务 + cream 错题），不强调谁多谁少，符合"各科的坚持"
+  * 数字一律 .font-num tabular-nums（Times 字体 + 等宽数字）
+  * 文案陪伴不催促：空态用"这周还没开始专注，不急"/"这周还没记心情，慢慢来"/"这周还没记任务或错题，慢慢来"，不用"暂无数据"
+  * 陪伴向小语（概览卡）：累计专注"每一分钟都算数" / 完成番茄"一个个，慢慢来" / 坚持天数"已经走了这么远" / 错题积累"记下就是成长"
+  * 响应式：概览 grid-cols-2 sm:grid-cols-4；心情/科目两列 lg:grid-cols-2，移动端单列堆叠
+  * a11y：aria-label 全覆盖（刷新学习统计/近 7 天每日专注分钟柱状图/近 7 天科目分布/各科任务/错题描述）；role="img" 图表
+- 文案样例（陪伴向，无催促）：
+  * 副标题（妹妹）："看看这段时间的坚持，每一分钟都算数"
+  * 副标题（姐姐）："陪她走过的这段路"
+  * 子卡副标题："每根柱子都是一段坚持" / "慢慢懂自己" / "各科的坚持"
+  * 概览小语："每一分钟都算数" / "一个个，慢慢来" / "已经走了这么远" / "记下就是成长"
+  * 空态："这周还没开始专注，不急" / "这周还没记心情，慢慢来" / "这周还没记任务或错题，慢慢来"
+  * 错误："统计暂时打不开，稍等一下再试"
+- 工程校验：ESLint 0 error 0 warning，dev server `GET / 200`、`GET /api/stats 200`（18-54ms）
+- 已知事项：
+  * 一次 fetch 设计：4 个子组件共享 loading 态，整 section 同步加载（无独立 loading 阶梯），换取单次请求效率
+  * recharts 在客户端渲染（"use client"），首屏需等 JS 加载后才绘制柱状图
+  * 任务 spec 提到的 weeklyCompletedTasks / weeklyPendingTasks 字段已由 API 返回但本 task 未要求展示（聚焦概览+趋势+心情+科目四部分），保留供后续 Sprint 使用
+  * 心情占比条颜色与 MOOD_OPTIONS softBg 同色系（leaf/amber/stone/slate/sky），与项目既有设计一致
+
+---
+Task ID: SPRINT-6-Integration
+Agent: main (Z.ai Code)
+Task: Sprint 6 集成 + 端到端自检
+
+Work Log:
+- 造近7天演示数据（13 focus/4 tasks/3 mistakes/4 moods）用于验证图表渲染
+- Agent Browser 端到端验证（经 Caddy:81）：
+  * 首页快捷入口"学习统计" → 进入统计板块 ✅
+  * 板块渲染：标题(视角化副标题) + 概览4卡 + 近7天专注柱状图 + 心情分布 + 科目分布 ✅
+  * 概览数字正确：累计专注325分钟/完成番茄13个/坚持天数7天/错题积累3道 ✅
+  * 柱状图7根柱子，今日(周五)深leaf高亮 ✅
+  * 心情分布4项带emoji(平静🍃/开心☀️/有点累🌙/有点焦虑🌧️)各1次 ✅
+  * 科目分布4科(数学1/1、语文1/0、英语1/1、物理1/1)任务数+错题数 ✅
+  * VLM 确认视觉：4数字卡/柱状图/心情分布/科目分布/配色奶白浅绿/排版 ✅
+  * 移动端390：数字卡2列/柱状图可见/心情科目单列堆叠/底部nav冻结 ✅
+  * 桌面端1280：4列数字卡/双列心情+科目 ✅
+  * 控制台无 error
+- 清理演示数据恢复干净初始态
+
+Stage Summary:
+- Sprint 6 全部交付：学习统计（4概览数字卡 + 近7天专注柱状图 + 心情分布 + 科目分布）
+- 设计哲学：看"坚持的轨迹"不看排名/对比，空数据用陪伴向鼓励（"这周还没开始专注，不急"）
+- 图表配色 leaf 系治愈色（#7aa881 主 + #5f9a6c 今日高亮），禁蓝紫
+- 入口：首页快捷入口（底部 nav 5 位已满）
+- 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
+- 待后续 Sprint：姐姐后台、AI 总结
