@@ -934,3 +934,148 @@ Stage Summary:
 - 入口：首页快捷入口（底部 nav 5 位已满）
 - 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
 - 待后续 Sprint：姐姐后台、AI 总结
+
+---
+Task ID: SPRINT-7-Foundation
+Agent: main (Z.ai Code)
+Task: Sprint 7 地基 —— 姐姐后台导航/权限/快捷入口
+
+Work Log:
+- nav-store: NavTab 加 "admin"
+- page.tsx: activeTab==="admin" 渲染 AdminSection
+- 首页快捷入口"姐姐后台"激活（available=true, navTab="admin"）
+- 创建 stub src/components/admin/admin-section.tsx（待子代理填充）
+- ESLint 0 error
+
+Stage Summary:
+- 地基就绪：导航激活、快捷入口激活
+- 待子代理：admin-section.tsx（权限守卫 + 陪伴仪表盘布局）
+- 共享契约（供子代理）：
+  * 当前身份: useUserStore(s=>s.currentUser).role => "sister"|"younger"
+  * 仅姐姐视角可进入 admin section；妹妹视角点击快捷入口进入时，section 内显示温柔提示"这是姐姐的角落～"+ 引导切回身份
+  * 复用已有 API（无需新增）：
+    - GET /api/today-overview -> {pendingTaskCount,completedTaskCount,focusMinutes,mood}
+    - GET /api/tasks?date=YYYY-MM-DD -> {tasks:Task[]}
+    - GET /api/moods?date=YYYY-MM-DD -> {entries:MoodEntry[]}
+    - GET /api/mistakes -> MistakeRecord[]（含 url）
+    - GET /api/notes?date=YYYY-MM-DD -> {notes:DailyNote[],date}
+    - GET /api/stats -> StatsData
+    - GET /api/focus-sessions?date=YYYY-MM-DD -> {sessions}
+  * 玻璃卡: GlassCard; shadcn/ui 在 src/components/ui/; date-fns 已装
+  * 今日日期串: new Date() 本地时区拼 "YYYY-MM-DD"
+  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促（"了解而非监督"），文件<500行单职责，TS严格无any
+
+---
+Task ID: 7-a
+Agent: full-stack-developer (admin UI)
+Task: 姐姐后台（陪伴仪表盘：权限守卫 + 概览 + 今日详情 + 最近活动）
+
+Work Log:
+- 通读 worklog.md（Sprint 1-6 + Sprint 7 地基）、task-types/mood-types/note-types、mistake-card（MistakeRecord 类型 + relativeTime 范式）、GlassCard、user-store（switchRole）、stats-section（section 编排范式）、stats-overview-cards（4 卡 grid 范式）、mood-timeline / note-list（cancelled-flag + onLoaded 范式）、today-overview（API 形态）、page.tsx（确认 AdminSection 已接入 activeTab==="admin"）、eslint.config.mjs（react-hooks/set-state-in-effect 规则未被关闭，需用 try/finally 模式）、agent-ctx 6-a 记录
+- 新建 src/components/admin/admin-overview.tsx（157 行）：
+  * 4 张 GlassCard 网格 grid-cols-2 sm:grid-cols-4
+  * 今日任务 completed/total（ListChecks）/ 专注分钟 focusMinutes（Timer）/ 今日心情 mood?emoji+label:"—"（Smile）/ 待完成任务 pendingTaskCount（Clock）
+  * 陪伴向小语："一件件来" / "每一分钟都算数" / "她的感受很重要" / "不急，慢慢来"
+  * 数字 .font-num tabular-nums；loading 时 Skeleton h-8 w-24
+  * framer-motion opacity+y 阶梯入场（delay 0.06s）
+  * effect cancelled-flag + try/catch/finally 模式（setLoading(false) + onLoaded 在 finally）
+- 新建 src/components/admin/admin-today-detail.tsx（303 行）：
+  * 双列 GlassCard（lg:grid-cols-2，移动端堆叠）
+  * 今日任务：GET /api/tasks?date=today，最多 5 条，超出显示"还有 N 条"
+    每条：✅/○ 勾选状态 + 标题（done 加 line-through）+ 科目 Badge + 🍅 completed/estimated（.font-num）+ 创建者
+    空态："妹妹今天还没列任务，也许她想先歇会儿"
+  * 今日心情：GET /api/moods?date=today，最多 3 条
+    每条：emoji 圆徽 + label（mood textColor）+ 相对时间 + 备注（line-clamp-2）+ 创建者
+    空态："妹妹今天还没记心情"
+  * Promise.allSettled 并行两请求，统一 loading + 单次 onLoaded
+  * effect cancelled-flag + try/catch/finally 模式
+  * 相对时间自写：刚刚/X分钟前/X小时前/昨天 M月D日/X天前
+- 新建 src/components/admin/admin-recent-activity.tsx（332 行）：
+  * 双列 GlassCard（lg:grid-cols-2，移动端堆叠）
+  * 最近错题：GET /api/mistakes，取前 3 条
+    每条：缩略图（image: img aspect-4/3 w-16 / voice: Mic2 图标）+ 科目 Badge + 类型 Badge + 相对时间 + 备注（截断 60 字，line-clamp-2）
+    只读，无点击交互（姐姐只看不改）
+    空态："还没有错题记录"
+  * 今日留言：GET /api/notes?date=today，全部
+    每条：作者标签（姐姐 leaf-soft/妹妹 cream，复用 note-list 便签纸色系）+ 时间 + 内容（截断 60 字）
+    空态："今天还没有留言"
+    长列表 max-h-96 overflow-y-auto
+  * Promise.allSettled 并行两请求，统一 loading + 单次 onLoaded
+  * RecentMistakeItem 抽为内部子组件（避免主组件过长）
+  * truncate 自写：超长加 …
+- 覆盖 src/components/admin/admin-section.tsx（原 10 行 stub → 159 行）：
+  * 权限守卫：role !== "sister" → GlassCard strong+sheen 居中卡片
+    标题"这是姐姐的角落～" + 副标题"想看看妹妹的状态？切到姐姐视角就能看到啦。" + 按钮"切到姐姐看看"（switchRole("sister")）+ 🌿 装饰
+    framer-motion opacity+y 入场
+  * 姐姐视角：header（Heart leaf 图标 + "姐姐的后台" + 副标题"看看妹妹今天的状态，不强求，她愿意说就说。" + 刷新按钮 ghost + RefreshCw 旋转态）
+  * AdminOverview + AdminTodayDetail + AdminRecentActivity 三子组件编排
+  * refreshKey + onLoaded 计数器：pendingLoadsRef 跟踪 3 子组件待完成数，归零时 setRefreshing(false)；初始挂载的 onLoaded 被 Math.max(0,...) 兜底
+  * 底部结语：framer-motion 淡入"她今天也在努力着。"
+- 校验：bun run lint → 0 error 0 warning exit 0（两次跑均干净）
+- API 冒烟（curl 经 :3000）：
+  * GET /api/today-overview → 200 {"pendingTaskCount":0,"completedTaskCount":0,"focusMinutes":0,"mood":null}
+  * GET /api/tasks?date=2026-07-03 → 200 {"tasks":[]}
+  * GET /api/mistakes → 200 []
+  * GET /api/notes?date=2026-07-03 → 200 {"notes":[],"date":"2026-07-03"}
+- dev.log 复查：✓ Compiled 多次无错误，4 个 API 均 200（8-79ms），admin section 编译通过
+
+Stage Summary:
+- 产物（4 个允许文件，全部 < 500 行，单职责）：
+  * src/components/admin/admin-overview.tsx（157 行，4 张今日状态概览卡 + Skeleton + 阶梯入场）
+  * src/components/admin/admin-today-detail.tsx（303 行，今日任务 + 今日心情 双列 + Promise.allSettled 并行）
+  * src/components/admin/admin-recent-activity.tsx（332 行，最近错题 + 今日留言 双列 + Promise.allSettled 并行）
+  * src/components/admin/admin-section.tsx（159 行，覆盖原 stub，权限守卫 + header + 三子组件编排 + 底部结语）
+- 关键决策：
+  * 3 子组件独立 fetch（5 endpoint）：AdminOverview（today-overview）/ AdminTodayDetail（tasks+moods）/ AdminRecentActivity（mistakes+notes），各自管理 loading + Skeleton，符合 mood-timeline / note-list 既有范式
+  * refreshKey + onLoaded 计数器：父级持有 refreshKey，3 子组件各报 onLoaded 一次，ref 计数器归零时关闭 refreshing 态
+  * effect cancelled-flag + try/finally 模式：满足 react-hooks/set-state-in-effect lint 规则（setLoading(true) 同步调用需配合 finally 的 setLoading(false) 才不被 flag，与 stats-section / mood-timeline 通过 lint 的模式一致）
+  * 权限守卫提前 return：role !== "sister" 时直接 return 守卫卡片，不挂载 3 个子组件（避免无谓 fetch）
+  * 文案全程陪伴向：禁用"监控/检查/绩效/达标/落后"，空态用"也许她想先歇会儿"/"还没有错题记录"/"今天还没有留言"，不用"暂无数据"
+  * 数字 .font-num tabular-nums：所有数字（任务数/番茄进度/时间/计数）均加 Times 字体类
+  * 配色奶白/浅绿/浅灰：leaf/leaf-soft/cream 语义色，禁蓝紫禁渐变；作者标签复用 note-list STICKY_BG 色系
+  * 响应式：概览 grid-cols-2 sm:grid-cols-4；详情/活动 lg:grid-cols-2 双列，移动端单列堆叠；留言列表 max-h-96 overflow-y-auto
+  * a11y：section aria-label / 刷新按钮 aria-label / 图标 aria-hidden / 缩略图 alt 取 note||subject
+  * 相对时间 + truncate 自写，不依赖外部库
+- 文案样例（陪伴向，无催促）：
+  * 副标题："看看妹妹今天的状态，不强求，她愿意说就说。"
+  * 概览小语："一件件来" / "每一分钟都算数" / "她的感受很重要" / "不急，慢慢来"
+  * 空态："妹妹今天还没列任务，也许她想先歇会儿" / "妹妹今天还没记心情" / "还没有错题记录" / "今天还没有留言"
+  * 权限守卫："这是姐姐的角落～" / "想看看妹妹的状态？切到姐姐视角就能看到啦。"
+  * 底部结语："她今天也在努力着。"
+- 工程校验：ESLint 0 error 0 warning，dev server `GET / 200`，4 个 API 均 200（8-79ms）
+- 已知事项：
+  * 3 子组件独立 fetch：共 5 endpoint，刷新时并行触发；未做单 endpoint 聚合（与 stats API 不同，此处无现成 admin 聚合 endpoint，按 task spec 复用已有 API）
+  * SSR 默认 younger：useUserStore persist 默认 role="younger"，姐姐首次访问需先切换；如已持久化为 sister，刷新后短暂渲染守卫卡片再切到仪表盘（与 stats-section 一致）
+  * 错题只读：姐姐后台只看不改，错题缩略图无点击交互（与 mistake-card 的大图 Dialog 不同，避免误操作）
+  * 留言截断 60 字：超长内容用 … 截断，未提供展开（保持仪表盘"一眼概览"语义，详细内容走 note section）
+
+---
+Task ID: SPRINT-7-Integration
+Agent: main (Z.ai Code)
+Task: Sprint 7 集成 + 端到端自检
+
+Work Log:
+- 造演示数据（3任务/3专注/2心情/2留言/2错题）用于验证仪表盘
+- Agent Browser 端到端验证（经 Caddy:81）：
+  * 妹妹视角点"姐姐后台"快捷入口 → 显示温柔提示"这是姐姐的角落～" + "切到姐姐看看"按钮 ✅
+  * 点"切到姐姐看看" → 自动切姐姐身份 → 仪表盘渲染 ✅
+  * 姐姐视角仪表盘数据全对：
+    - 概览4卡：今日任务2/3、专注75分、心情🌙有点累、待完成1 ✅
+    - 今日任务3条（勾选状态/科目Badge/番茄进度/创建者）✅
+    - 今日心情2条（emoji+label+时间+备注）✅
+    - 最近错题2条（图片缩略图+语音图标+科目+备注+时间）✅
+    - 今日留言2张（作者标签+内容+时间）✅
+    - 底部结语"她今天也在努力着。" ✅
+  * VLM 确认视觉：4概览卡/任务列表/心情/错题/留言/配色奶白浅绿/排版无问题 ✅
+  * 移动端390：概览2列/任务心情单列堆叠/错题留言单列/底部nav冻结 ✅
+  * 桌面端1280：4列概览/双列详情 ✅
+  * 控制台无 error
+- 清理演示数据恢复干净初始态
+
+Stage Summary:
+- Sprint 7 全部交付：姐姐后台（陪伴仪表盘）
+- 设计哲学：陪伴仪表盘非监控面板，全程"了解而非监督"，空数据温暖向，无排名/对比/警告
+- 权限：仅姐姐视角可进入，妹妹视角温柔提示+一键切换身份
+- 复用5个已有API（today-overview/tasks/moods/mistakes/notes），零新增API
+- 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
+- 仅剩最后一项：AI 总结

@@ -87,7 +87,8 @@ const ENTRIES: Entry[] = [
     description: "了解妹妹的学习节奏",
     icon: "Sparkles",
     target: "admin",
-    available: false,
+    available: true,
+    navTab: "admin",
   },
 ];
 

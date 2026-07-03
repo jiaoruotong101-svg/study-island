@@ -8,7 +8,15 @@ import { create } from "zustand";
  * 受"只能使用 / 单路由"约束，所有功能板块均作为 `/` 下的 section
  * 通过客户端状态切换，底部 nav 点击即切换 section。
  */
-export type NavTab = "home" | "tasks" | "mistakes" | "chat" | "mood" | "notes" | "stats";
+export type NavTab =
+  | "home"
+  | "tasks"
+  | "mistakes"
+  | "chat"
+  | "mood"
+  | "notes"
+  | "stats"
+  | "admin";
 
 interface NavState {
   activeTab: NavTab;

@@ -6,6 +6,7 @@ import { TaskSection } from "@/components/tasks/task-section";
 import { MoodSection } from "@/components/mood/mood-section";
 import { NoteSection } from "@/components/notes/note-section";
 import { StatsSection } from "@/components/stats/stats-section";
+import { AdminSection } from "@/components/admin/admin-section";
 import { HomeSection } from "@/components/home/home-section";
 import { useNavStore } from "@/store/nav-store";
 
@@ -29,6 +30,9 @@ export default function HomePage() {
   }
   if (activeTab === "stats") {
     return <StatsSection />;
+  }
+  if (activeTab === "admin") {
+    return <AdminSection />;
   }
   return <HomeSection />;
 }
