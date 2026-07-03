@@ -1,5 +1,5 @@
 /**
- * chat-service —— 实时聊天的 socket.io 中继（mini-service，端口 3003）。
+ * chat-service —— 实时聊天的 socket.io 中继（mini-service）。
  *
  * 设计原则（与主应用解耦）：
  *   - 纯中继，不碰数据库（持久化由主应用 /api/chat/messages 负责）
@@ -8,9 +8,9 @@
  *     → 本服务收到后 io.emit('chat:message', record) 广播给所有连接
  *     → 发送者自身也会收到，前端按 id 去重避免重复
  *
- * 与 Caddy 网关的契约：
- *   - path 必须为 '/'（Caddy 据此把 XTransformPort=3003 的请求转发过来）
- *   - 前端用 io('/?XTransformPort=3003') 连接
+ * 部署：
+ *   - 本地/沙箱：PORT 固定 3003，前端用 io('/?XTransformPort=3003') 走网关
+ *   - 生产（Railway/Render）：PORT 由环境变量提供，前端用 io(CHAT_URL) 直连
  *
  * 启动：cd mini-services/chat-service && bun install && bun run dev
  */
@@ -18,7 +18,7 @@
 import { createServer } from "http";
 import { Server, type Socket } from "socket.io";
 
-const PORT = 3003;
+const PORT = Number(process.env.PORT) || 3003;
 
 const httpServer = createServer();
 const io = new Server(httpServer, {

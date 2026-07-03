@@ -1342,3 +1342,21 @@ Stage Summary:
 - 多对隔离：pairId 过滤，不同家庭数据互不可见
 - 安全：service_role key 仅服务端用，cookie HMAC 签名，bcrypt 密钥哈希
 - 弃用 Prisma（沙箱无法直连 Postgres），改用 supabase-js 走 REST API
+
+---
+Task ID: DEPLOY-PREP (部署准备)
+Agent: main (Z.ai Code)
+Task: 代码打包下载 + 部署文档 + 多环境适配
+
+Work Log:
+- 创建 .env.example（脱敏环境变量模板）
+- 创建 README.md（完整项目说明 + 本地开发 + 部署指南）
+- chat-service/index.ts：PORT 改为 process.env.PORT || 3003（Railway 部署适配）
+- chat-socket.ts：支持 NEXT_PUBLIC_CHAT_SERVICE_URL 环境变量（生产直连 Railway，本地走 Caddy 网关）
+- 打包代码 study-island.zip（381KB，排除 node_modules/.next/skills/.git 等）
+- 上传到 tmpfiles.org 获得临时下载链接（约1小时有效）
+
+Stage Summary:
+- 代码包下载链接：https://tmpfiles.org/w9wHjGr3Uxau/study-island.zip（临时1小时）
+- 推荐永久方案：推到 GitHub（需用户自行操作或提供 PAT）
+- 部署：主应用 Vercel + chat-service Railway，详见 README.md
