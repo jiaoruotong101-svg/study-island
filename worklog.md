@@ -1299,3 +1299,46 @@ Stage Summary:
   1. 代码逻辑正确，但 Supabase 表还未建（需要主代理执行 supabase-schema.sql），表建好 + SUPABASE_URL/SERVICE_ROLE_KEY/BUCKET 环境变量配置后即可跑通
   2. Storage bucket 需要主代理在 Supabase Dashboard 设为 public（否则 getPublicUrl 拿到的 URL 仍需签名才能访问）
   3. .env 已配置 SUPABASE_URL/SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY/SUPABASE_BUCKET
+
+---
+Task ID: SUPABASE-MIGRATION (云端持久化)
+Agent: main (Z.ai Code) + 子代理 SUPABASE-MIGRATE
+Task: 数据存储从本地 SQLite 迁移到 Supabase（Postgres + Storage）
+
+Work Log:
+- 背景：沙箱封了直连 Postgres 5432 端口，但 Supabase REST API（HTTPS 443）可达
+- .env 配置 Supabase 凭据（URL/anon/service_role/bucket/签名密钥）
+- 新建 src/lib/supabase.ts：service_role client（绕过 RLS，persistSession:false）
+- Supabase Storage：创建 public bucket "study-island-uploads"
+- 用户在 Supabase SQL Editor 执行 supabase-schema.sql 建表（10 张表 + 索引 + RLS）
+- 子代理 SUPABASE-MIGRATE：所有 17 个 API + auth lib 从 Prisma 改为 @supabase/supabase-js
+  * findMany → .from().select().eq().order()
+  * create → .insert().select().single()
+  * update → .update().eq("id").eq("pairId").select().single()（双过滤防越权）
+  * delete → .delete().eq().eq() + storage.remove() 删文件
+  * upsert → .upsert(row, { onConflict: "pairId" })（HomeQuote/HomeGreeting 单例）
+  * 聚合 → Promise.all 多子查询
+  * 文件上传 → supabase.storage.upload() + getPublicUrl()
+  * 删除 /api/files/[filename]（Supabase Storage 直接提供公开 URL）
+- 弃用 Prisma（schema.prisma 和 db.ts 保留作文档，不再引用）
+
+验证（全部通过）：
+- 10 张表通过 REST API 全部 200 可访问 ✅
+- 姐姐注册 → 生成配对码 WCV369 → 数据入 Supabase ✅
+- 妹妹配对注册 → 关联成功 ✅
+- 登录 → cookie session 生效 ✅
+- 妹妹建任务 → 姐姐登录能看到（同 pair 共享）✅
+- 图片上传 Supabase Storage → 公开 URL 可访问（200）✅
+- 错题创建 + 图片从 Supabase 加载 ✅
+- 聊天消息持久化到 Supabase → 姐姐能拉到 ✅
+- 数据隔离：第二对配对看不到第一对数据 ✅
+- 前端体验：登录/任务时间/错题图片/聊天消息全正常 ✅
+- Supabase Dashboard 确认数据：2 Pair / 4 Account / 1 Task / 1 Mistake / 1 Chat / 1 Storage file ✅
+- ESLint 0 error，dev:3000 + chat-service:3003 常驻
+
+Stage Summary:
+- 数据存储完整迁移到 Supabase 云端：Postgres（结构化）+ Storage（图片/语音）
+- 真正持久化：沙箱重置不影响数据，姐姐妹妹在任何设备登录都看到同一套云端数据
+- 多对隔离：pairId 过滤，不同家庭数据互不可见
+- 安全：service_role key 仅服务端用，cookie HMAC 签名，bcrypt 密钥哈希
+- 弃用 Prisma（沙箱无法直连 Postgres），改用 supabase-js 走 REST API
