@@ -9,8 +9,10 @@
  *   - 禁止 io("http://localhost:3003") 形式
  *
  * 事件契约：
- *   - emit('chat:send', payload)  →  发送一条已持久化的消息给中继服务
- *   - on('chat:message', payload) →  收到广播（含发送者自己，前端按 id 去重）
+ *   - emit('chat:send', payload)   →  发送一条已持久化的消息给中继服务
+ *   - on('chat:message', payload)  →  收到聊天广播（含发送者自己，前端按 id 去重）
+ *   - emit('quote:update', quote)  →  首页留言更新后广播给所有首页
+ *   - on('quote:updated', quote)   →  收到留言更新，首页实时刷新
  */
 
 import { io, type Socket } from "socket.io-client";

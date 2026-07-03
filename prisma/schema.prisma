@@ -63,3 +63,13 @@ model ChatMessage {
   duration  Int?
   createdAt DateTime @default(now())
 }
+
+/// 首页小岛留言 —— 姐姐和妹妹可自由编辑的共享语录，标注作者视角
+/// 单例：固定 id = "island-quote"，upsert 更新
+model HomeQuote {
+  id         String   @id /// 固定 "island-quote"
+  content    String
+  /// 作者角色：sister 姐姐 / younger 妹妹
+  authorRole String
+  updatedAt  DateTime @updatedAt
+}

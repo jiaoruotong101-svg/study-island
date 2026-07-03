@@ -250,3 +250,33 @@ Stage Summary:
 - 关键架构决策：单路由 + 客户端 section 切换（useNavStore）；聊天 = socket 中继(3003) + 主应用 API 持久化(3000)；文件存储 uploads/ + /api/files 访问
 - 待后续 Sprint：番茄钟、每日留言、心情记录、学习统计、姐姐后台、AI 总结
 - 注意事项给后续：实时功能测试必须走 Caddy:81 而非直连 :3000
+
+---
+Task ID: SPRINT-2.1
+Agent: main (Z.ai Code)
+Task: 首页陪伴语录改为姐姐/妹妹可自由编辑的小岛留言，标注视角，实时同步
+
+Work Log:
+- Prisma 新增 HomeQuote 单例模型（id 固定 "island-quote"，content/authorRole/updatedAt），db push
+- 新增 GET/PUT /api/quote（upsert 单例；空内容/超200字/非法 role 校验；runtime=nodejs）
+- chat-service 加 quote:update → quote:updated 中继事件（bun --hot 自动重启生效）
+- chat-socket.ts 契约注释补充 quote 事件
+- 新建 src/lib/quote-types.ts（HomeQuote 共享类型）
+- 新建 src/components/home/quote-editor.tsx（Dialog 编辑器：textarea 200字限、视角化 placeholder、保存调 PUT、错误提示）
+- 改造 companion-quote.tsx：挂载 GET /api/quote 加载；无留言回退 getQuoteOfTheDay；显示视角标注（姐姐留/妹妹留）+相对时间；监听 socket quote:updated 实时刷新；编辑入口铅笔按钮；保存成功 toast
+- 修复：dev server 热重载不重建 PrismaClient（globalForPrisma 缓存），db.homeQuote undefined → 重启 dev server 加载新生成的 client
+- Agent Browser 双会话端到端验证（经 Caddy:81）：
+  * 无留言时回退默认语录库
+  * 妹妹编辑保存 → 标注"妹妹 留"，姐姐会话首页实时收到（不刷新）
+  * 姐姐会话切身份后编辑 → 标注"姐姐 留"，妹妹会话实时收到
+  * 刷新后留言持久化（数据库）
+  * 空内容前端+API 双重校验"留句话再走呀"
+  * VLM 确认视觉：玻璃质感、视角标注、铅笔编辑按钮、配色合规
+  * 控制台无 error
+- 清理测试数据恢复干净初始态
+
+Stage Summary:
+- 首页"小岛留言"功能交付：姐姐妹妹共享同一条留言，可自由编辑，标注作者视角（姐姐留/妹妹留），socket 实时双向同步，数据库持久化
+- 复用现有 chat-service socket 通道，零新增服务
+- 设计：编辑器 placeholder 随当前身份切换文案（姐姐视角"给妹妹留句鼓励"、妹妹视角"想对姐姐说什么"），体现双向陪伴
+- ESLint 0 error，dev:3000 + chat-service:3003 常驻

@@ -49,6 +49,14 @@ io.on("connection", (socket: Socket) => {
     io.emit("chat:message", payload);
   });
 
+  /**
+   * 首页小岛留言更新：主应用 PUT /api/quote 持久化后 emit('quote:update', record)，
+   * 本服务原样广播 quote:updated，所有首页实时刷新。
+   */
+  socket.on("quote:update", (payload: unknown) => {
+    io.emit("quote:updated", payload);
+  });
+
   socket.on("disconnect", (reason: string) => {
     connectionCount = Math.max(0, connectionCount - 1);
     console.log(
