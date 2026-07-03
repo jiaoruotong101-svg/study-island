@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, BookX, Timer, MessagesSquare, User } from "lucide-react";
+import { Home, BookX, ListChecks, MessagesSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavStore, type NavTab } from "@/store/nav-store";
 
@@ -25,7 +25,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { key: "home", label: "首页", icon: Home, available: true },
   { key: "mistakes", label: "错题", icon: BookX, available: true },
-  { key: "pomodoro", label: "番茄", icon: Timer, available: false },
+  { key: "tasks", label: "任务", icon: ListChecks, available: true },
   { key: "chat", label: "聊天", icon: MessagesSquare, available: true },
   { key: "me", label: "我的", icon: User, available: false },
 ];

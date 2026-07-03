@@ -73,3 +73,36 @@ model HomeQuote {
   authorRole String
   updatedAt  DateTime @updatedAt
 }
+
+/// 今日任务 —— 姐姐和妹妹都可创建，体现"自主规划"而非"被派活"
+model Task {
+  id           String   @id @default(cuid())
+  title        String
+  subject      String?
+  /// 预计需要的番茄数（专注 25 分钟为一个番茄）
+  estimatedPomodoros Int @default(1)
+  /// 已完成的番茄数
+  completedPomodoros Int @default(0)
+  done         Boolean  @default(false)
+  completedAt  DateTime?
+  /// 创建者角色：sister 姐姐 / younger 妹妹
+  createdBy    String
+  /// 任务归属日期 "YYYY-MM-DD"，便于按日查询"今日任务"
+  taskDate     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// 专注/休息会话记录 —— 番茄钟每次完成一段就记一条
+model FocusSession {
+  id        String   @id @default(cuid())
+  /// 完成者角色：sister / younger
+  role      String
+  /// 关联任务（可选，休息段无关联）
+  taskId    String?
+  /// 时长（分钟）
+  durationMinutes Int
+  /// 类型：focus 专注 / break 休息
+  type      String
+  completedAt DateTime @default(now())
+}

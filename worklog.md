@@ -303,3 +303,178 @@ Stage Summary:
 - 底部导航栏实现真正冻结（fixed），无论首页/错题/聊天、无论内容多长、无论滚动位置，始终可见可切换
 - 通过 main padding-bottom 预留空间，确保任何 section 的底部内容（含聊天输入框）不被遮挡
 - 兼容移动端 safe-area-inset-bottom（iOS 底部安全区）
+
+---
+Task ID: SPRINT-3-Foundation
+Agent: main (Z.ai Code)
+Task: Sprint 3 地基 —— 今日任务+番茄钟数据层/导航/API
+
+Work Log:
+- Prisma 新增 Task（title/subject/estimatedPomodoros/completedPomodoros/done/completedAt/createdBy/taskDate）与 FocusSession（role/taskId?/durationMinutes/type/completedAt）模型，db push 成功
+- 新增 src/lib/task-types.ts（Task/FocusSession/CreatorRole/TodayOverviewData 共享类型）
+- API:
+  * GET /api/tasks?date=YYYY-MM-DD + POST（建任务，校验 title/createdBy/estimatedPomodoros 1-12）
+  * PATCH /api/tasks/[id]（done 勾选 / incPomodoro 番茄+1）
+  * DELETE /api/tasks/[id]
+  * GET /api/focus-sessions?date=&role= + POST（记录专注/休息会话，校验 role/type/duration 1-120）
+  * GET /api/today-overview（聚合今日待完成/已完成任务数+专注分钟数）
+- nav-store: NavTab 加 "tasks"
+- app-footer: 第3个 tab 从"番茄(即将)"改为"任务(可用)"，icon 改 ListChecks
+- page.tsx: activeTab==="tasks" 渲染 TaskSection
+- 创建 stub src/components/tasks/task-section.tsx（待子代理填充）
+- 重启 dev server 加载新 Prisma client，curl 验证 /api/tasks 返回 {tasks:[]}、/api/today-overview 返回 {0,0,0}
+- ESLint 0 error
+
+Stage Summary:
+- 地基就绪：任务+专注数据层、5 个 API、导航激活
+- 待并行子代理：3-a 任务 UI（list/item/composer + section容器）、3-b 番茄钟（timer + store）
+- 共享契约（供子代理）：
+  * 类型: import type { Task, FocusSession, CreatorRole } from "@/lib/task-types"
+  * 当前身份: useUserStore(s=>s.currentUser).role => "sister"|"younger"
+  * 任务 API: GET /api/tasks?date=YYYY-MM-DD -> {tasks:Task[]}; POST /api/tasks {title,subject?,estimatedPomodoros?,createdBy,taskDate?} -> {ok,task}; PATCH /api/tasks/[id] {done?:bool, incPomodoro?:true} -> {ok,task}; DELETE /api/tasks/[id]
+  * 专注 API: GET /api/focus-sessions?date=&role= -> {sessions}; POST /api/focus-sessions {role,taskId?,durationMinutes,type:"focus"|"break"} -> {ok,session}
+  * 玻璃卡: import { GlassCard } from "@/components/ui/glass-card" (variant/pad/sheen)
+  * 今日日期串: 用 new Date() 本地时区拼 "YYYY-MM-DD"
+  * 设计铁律: 奶白/浅绿/浅灰，禁蓝紫禁渐变，中文宋体数字Times(.font-num)，文案陪伴不催促，文件<500行单职责，TS严格无any
+
+---
+Task ID: 3-a
+Agent: full-stack-developer (task UI)
+Task: 今日任务 UI（CRUD + 联动番茄钟预留）
+
+Work Log:
+- 通读 worklog.md（Sprint 1/2 地基 + 2-a 错题 + 2-b 聊天 + 2.1 留言 + 2.2 footer 冻结）、task-types.ts、tasks API（route.ts + [id]/route.ts）、user-store、page.tsx、GlassCard、shadcn 组件清单，确认共享契约与设计铁律
+- 新建 src/components/tasks/task-section.types.ts：re-export Task/CreatorRole、SUBJECTS（数学/语文/英语/物理/化学/生物/历史/地理/政治/其他）、POMODORO_OPTIONS(1-6)、TaskComposerPayload、TaskItemHandlers、todayStr()
+- 新建 src/components/tasks/task-composer.tsx：任务名 Input（回车提交，isComposing 守卫，maxLength 100）+ 科目 Select（10 项 + "不选科目"）+ 预计番茄数 Select（1-6，默认 1）+ 添加按钮；视角化 placeholder；本地校验 + 错误文案
+- 新建 src/components/tasks/task-item.tsx：Checkbox（leaf 色）+ 任务名（完成态删除线灰化）+ 科目 Badge（leaf-soft）+ 🍅 completedPomodoros/estimatedPomodoros（.font-num）+ 创建者标注 + "设为专注"按钮（active 时 leaf 高亮禁用）+ 删除按钮（AlertDialog 二次确认，destructive 色）；active 态 leaf 边框 + 浅绿底 + "专注中"Badge；framer-motion layout 入场动画
+- 新建 src/components/tasks/task-list.tsx：状态分支（loading Skeleton×3 / error 陪伴条 / empty 视角化空态 / normal 分两组：待完成 + 已完成 N）；max-h-[40vh] overflow-y-auto；已完成组仅非空时渲染
+- 覆盖 src/components/tasks/task-section.tsx：容器，useState+fetch；标题区（ListChecks 图标 + "今日任务" + 视角化副标题 + 刷新按钮）；TaskComposer；TaskList；番茄钟区域（dynamic import + PomodoroBoundary 兜底）；乐观更新+回滚（toggle/delete/pomodoroComplete）；activeTaskId 状态 + activeTask 推导；handlePomodoroComplete PATCH incPomodoro
+- 关键决策：番茄钟 dynamic import 与 turbopack 静态解析冲突 —— 实测字面量/模板字面量/运行时拼接三种 import() 在 turbopack 下都无法延迟解析，文件不存在时整站 500（page.tsx 静态导入 TaskSection）。为避免整站 500，在 src/components/pomodoro/pomodoro-timer.tsx 放置最小占位 stub（bash `[ -f file ] ||` guard 保证不覆盖 3-b 已有成果），严格遵循契约（命名导出 PomodoroTimer + props activeTask/onPomodoroComplete），渲染"番茄钟即将上线"卡片 + 当前专注任务展示 + "手动记一段专注"按钮验证端到端链路。3-b 覆盖即可，无需协调。即便有 stub 仍加 PomodoroBoundary（class ErrorBoundary）兜底
+- 清理：移除 task-section.tsx 未使用的 GlassCard 导入；移除 task-section.types.ts 未使用的 TaskGroupMeta/isCreatorRole 与对应 import
+- 校验：bun run lint 0 error 0 warning exit 0；dev server `✓ Compiled` `GET / 200`（首页正常，不再 500）
+- API 冒烟（curl）：POST /api/tasks 201 / GET 200 / PATCH incPomodoro 200（completedPomodoros 0→1）/ PATCH done 200（completedAt 设置）/ DELETE 200 / 列表回归空 —— 全链路通过，测试数据已清理
+
+Stage Summary:
+- 产物（5 个允许文件 + 1 个必要编译桩，全部 < 500 行）：
+  * src/components/tasks/task-section.types.ts（55 行，共享类型与常量）
+  * src/components/tasks/task-composer.tsx（167 行，录入器）
+  * src/components/tasks/task-item.tsx（189 行，单条任务卡）
+  * src/components/tasks/task-list.tsx（131 行，列表区 + 状态分支）
+  * src/components/tasks/task-section.tsx（351 行，section 容器 + 番茄钟联动）
+  * src/components/pomodoro/pomodoro-timer.tsx（102 行，**编译桩**，3-b 将覆盖）
+- 关键决策：
+  * 状态管理：useState + fetch（项目未配 QueryClientProvider，沿用 2-a/2-b 模式）
+  * 乐观更新+回滚：toggle/delete/pomodoroComplete 三处均先本地变更再 PATCH，失败回滚+setError/reload
+  * activeTaskId 闭包新鲜度：handleDelete 用 setActiveTaskId 函数式更新，避免把 activeTaskId 放进依赖数组导致 handlers 频繁重建
+  * 番茄钟联动：activeTaskId 由点"设为专注"切换（toggle 语义）；activeTask 从 tasks 数组按 id 查找；任务被标完成时自动清空 activeTaskId；onPomodoroComplete PATCH incPomodoro + 乐观+1/回滚-1
+  * 番茄钟编译桩：turbopack 对 import() 字面量做静态解析，3-b 文件不存在时整站 500，故放最小 stub（遵循契约，3-b 覆盖即可）+ PomodoroBoundary 兜底
+  * 文案陪伴向：副标题/composer placeholder/空态/删除确认/错误文案全部按 sister/younger 视角区分，不催促
+- ⚠️ 已知问题 / 交接事项：
+  * pomodoro-timer.tsx 当前是 stub：3-b 创建真实实现时直接覆盖，契约不变（命名导出 PomodoroTimer，props { activeTask: Task | null; onPomodoroComplete: (taskId: string|null) => void }）。task-section 传 activeTask（tasks 数组按 activeTaskId 查找）+ handlePomodoroComplete（PATCH incPomodoro + 乐观+回滚）
+  * stub 的"手动记一段专注"按钮是临时占位（验证 pomodoro→task 链路）；3-b 实现真实计时器后自然消失
+  * 此 stub 文件超出原"只允许 5 个文件"范围，属让整站可编译可运行的必要妥协；已用 bash guard 保证不覆盖 3-b 已有成果
+  * /agent-ctx 路径在当前环境权限不可写（Permission denied），agent-ctx 工作记录改存于 /home/z/my-project/agent-ctx/3-a-full-stack-developer-task-ui.md
+- 文案样例（陪伴向）：
+  * 副标题："今天想做哪几件事？慢慢来，一件一件做就好。" / "看看今天想陪她做哪些，不催，陪着她就好。"
+  * placeholder："今天想做哪件事，慢慢写就好…" / "想陪她做点什么，写下来吧…"
+  * 空态："今天还没列任务，先想想最重要的一件是什么" / "妹妹还没列任务，也许她想先歇会儿"
+  * 删除确认："今天做不完也没关系，删掉就是不想做了，以后还能再加。"
+  * 错误："任务暂时打不开，稍等一下再试" / "没能加进来，再试一次看看" / "没能保存，再点一次试试"
+
+---
+Task ID: 3-b
+Agent: full-stack-developer (pomodoro)
+Task: 番茄钟（计时状态机 + 圆形进度 + 段完成持久化）
+
+Work Log:
+- 通读 worklog.md（Sprint 1/2 地基 + 2-a 错题 + 2-b 聊天 + 2.1 留言 + 2.2 footer 冻结 + Sprint 3 地基 + 3-a 任务 UI）、task-types.ts、focus-sessions API、user-store、GlassCard、task-section.tsx（含 PomodoroTimer 契约与 dynamic import）、3-a 留下的 pomodoro-timer.tsx 编译桩、use-now.ts 与 voice-recorder.tsx 的 useIsClient 模式、globals.css（leaf/leaf-soft/cream 语义色 + .font-num + .glass-strong + .glass-sheen）、Button/Badge 组件
+- 新建 src/store/pomodoro-store.ts（184 行）：
+  * Zustand 不持久化（计时态不跨刷新，符合番茄钟直觉）
+  * 状态：phase("focus"|"break")、status("idle"|"running"|"paused")、remainingSec、currentPhaseTotalSec、completedFocusCount、todayFocusCount、todayFocusInitialized、lastCompletedSeq（信号）、lastCompleted（刚结束段信息）
+  * 时长常量导出：FOCUS_MIN=25、SHORT_BREAK_MIN=5、LONG_BREAK_MIN=15、LONG_BREAK_EVERY=4
+  * actions：start/pause/reset/skip/tick/setTodayFocusCount
+  * tick：remainingSec>1 常规递减；===1 时自然完成段，同 tick 内切到下一段（保留 running 自动衔接），focus 段递增 completedFocusCount + todayFocusCount，设置 lastCompleted + 推进 lastCompletedSeq
+  * skip：仅切下一段，不递增 completedFocusCount、不设 lastCompleted（"跳过"非"完成"，组件 effect 不触发副作用）
+  * 长休判定：completedFocusCount>0 && %4===0（避免 0 段也长休）
+  * nextBreakSec / computeNextPhase 辅助函数，纯逻辑无副作用
+  * store 不持有 activeTask / onPomodoroComplete（组件 props），保证单职责
+- 覆盖 src/components/pomodoro/pomodoro-timer.tsx（382 行，原 102 行 stub）：
+  * 严格匹配契约：export interface PomodoroTimerProps { activeTask: {id,title,subject,estimatedPomodoros,completedPomodoros}|null; onPomodoroComplete: (taskId: string|null)=>void }
+  * useIsClient（useSyncExternalStore 模式）+ useUserStore 取 role
+  * 订阅 store 字段 + actions
+  * refs 保存 activeTask / onPomodoroComplete / role 最新值，避免副作用 effect 依赖 props
+  * Effect 1：挂载时若 todayFocusInitialized=false，GET /api/focus-sessions?date=today，过滤 type==="focus" 计数后 setTodayFocusCount（仅一次，cancelled 标志防竞态）
+  * Effect 2：isClient && status==="running" 时 setInterval(1000)→tick()，卸载/暂停清 interval
+  * Effect 3：监听 lastCompletedSeq 变化（prevSeqRef 比对），通过 usePomodoroStore.getState().lastCompleted 取最新段信息，POST /api/focus-sessions（失败仅日志），focus 段调 onPomodoroCompleteRef.current(taskId)
+  * UI：GlassCard variant=strong sheen pad=lg
+    - 顶部：Timer 图标 + "番茄钟" + 🍅 × N（今日，font-num tabular-nums；未初始化显示 …）
+    - 阶段标签 Badge（leaf 边框）+ 任务名（truncate，无则"自由专注"）
+    - 圆形进度环 SVG（viewBox 240，strokeWidth 12，leaf 色，rotate(-90) 从 12 点起；key=phase 段切换重挂载避免回弹；transition-[stroke-dashoffset] duration-500 ease-out 仅作用于段内递减）+ 中心 mm:ss（font-num text-5xl/6xl tabular-nums）+ 段时长小字
+    - 陪伴文案：focus "专注完这一段就歇会儿" / "再专注 1 个就长休啦"（nextFocusTriggersLongBreak）；break "休息也是学习的一部分" / "好好歇歇，待会儿再开始"
+    - 控制按钮组：重置（ghost icon，idle 禁用）+ 主按钮（开始/暂停/继续，size=lg，bg-leaf text-primary-foreground，min-w-120px）+ 跳过（ghost icon，idle 禁用）
+    - 底部：activeTask 时显示已完成/预计番茄数（font-num）
+    - framer-motion 入场动画（opacity+y）
+  * 响应式：环 h/w-[200px] sm:h/w-[240px]；mm:ss text-5xl sm:text-6xl；任务名 max-w 180/260
+  * ARIA：aria-label 番茄钟 / 重置当前段 / 跳过当前段；SVG aria-hidden
+- 校验：bun run lint → exit 0，0 error 0 warning
+- API 冒烟（curl）：
+  * GET /api/focus-sessions?date=2026-07-03 → 200 `{sessions:[]}`
+  * POST focus session {younger,null,25,focus} → 201 `{ok:true,session:{...}}`
+  * POST break session {younger,null,5,break} → 201
+  * POST bad role → 400 `{ok:false,error:"不知道是谁专注的"}`
+  * GET 再查 → 返回两条 desc 排序
+  * 测试数据已清理（db.focusSession.deleteMany）
+
+Stage Summary:
+- 产物（2 个文件，均 < 500 行）：
+  * src/store/pomodoro-store.ts（184 行，Zustand 计时状态机，不持久化）
+  * src/components/pomodoro/pomodoro-timer.tsx（382 行，完整番茄钟，覆盖 3-a 的 102 行 stub）
+- 关键决策：
+  * store/组件职责分离：store 持有计时核心 + 段切换纯逻辑，副作用（POST + onPomodoroComplete）由组件 effect 监听 lastCompletedSeq 触发
+  * 自然完成 vs 跳过：tick 到 0 推进 lastCompletedSeq（触发副作用），skip 仅切段不记录不回调
+  * props 新鲜度：activeTask/onPomodoroComplete/role 用 ref 保存，副作用 effect 依赖仅 lastCompletedSeq，避免 props 变化重触发
+  * todayFocusCount：挂载时 GET 一次（todayFocusInitialized 防重复），自然完成专注时本地自增；POST 失败仅日志，不阻塞 onPomodoroComplete
+  * 进度环：key=phase 段切换重挂载避免回弹动画，transition 仅作用于段内逐秒递减
+  * 计时跨 nav 切换会"暂停"（spec 明确接受）：interval 在组件 useEffect，TaskSection 卸载即清；store 单例保留 remainingSec，重新挂载从断点继续
+- 工程校验：ESLint 0 error 0 warning，dev server `✓ Compiled`，API 三接口冒烟通过
+- ⚠️ 已知事项：
+  * 计时跨 nav 切换会"暂停"（spec 接受）；后续若需真正后台计时，可改 Web Worker 或 module-level setInterval
+  * onPomodoroComplete 与 POST focus session 解耦：POST 失败仅日志，今日番茄数会在下次挂载从 API 重拉（可能少于本地 store 计数）
+  * 长休判定基于 currentPhaseTotalSec === LONG_BREAK_SEC，若未来调整时长常量需同步
+- 文案样例（陪伴向）：
+  * 阶段标签："专注中" / "休息一下" / "长休息"
+  * 陪伴文案："专注完这一段就歇会儿" / "再专注 1 个就长休啦" / "休息也是学习的一部分" / "好好歇歇，待会儿再开始"
+  * 任务名缺省："自由专注"
+  * 段时长提示："专注 25 分钟" / "短休 5 分钟" / "长休 15 分钟"
+  * 今日计数："🍅 × N 今日"
+
+---
+Task ID: SPRINT-3-Integration
+Agent: main (Z.ai Code)
+Task: Sprint 3 集成 + 端到端自检 + 首页概览接真实数据
+
+Work Log:
+- 今日概览卡片接真实数据：改造 today-overview.tsx，从 /api/today-overview 拉取（待完成/已完成任务数+专注分钟），心情卡暂占位"即将上线"
+- 首页"功能入口"网格更新：今日任务/错题记录/实时聊天 标"已上线"且点击切对应 nav section；番茄钟入口合并到"今日任务"；其余（每日留言/心情/统计/姐姐后台）仍"即将"
+- Agent Browser 端到端验证（经 Caddy:81）：
+  * 底部 nav 5 tab：首页/错题/任务(新)/聊天/我的，仅"我的"禁用 ✅
+  * 任务 section 完整渲染：录入区(任务名+科目+番茄数+添加)+任务列表(待完成/已完成分组)+番茄钟(圆形进度+时间+开始/重置/跳过) ✅
+  * 创建任务 → 出现在待完成列表 ✅
+  * 设为当前专注 → 任务高亮"专注中" ✅
+  * 番茄钟开始计时：25:00→24:57（3秒递减3秒），按钮变"暂停" ✅
+  * API 模拟完成一段专注：POST focus session 201 + PATCH incPomodoro（0→1）+ today-overview focusMinutes(0→25) ✅
+  * 刷新后 UI 同步：任务进度 1/2 + 番茄钟今日🍅1（VLM 确认）✅
+  * 勾选完成 → 任务移到已完成组 + overview completedTaskCount 0→1 ✅
+  * 删除任务 → AlertDialog 二次确认("删掉这条任务吗？"/"再想想"/"删掉") → 删除成功显示空态 ✅
+  * 首页今日概览接真实数据：显示"今日已完成 1/1 待完成 0 专注分钟 25" ✅
+  * 首页快捷入口"今日任务"点击 → 跳转任务 section ✅
+  * 移动端 390 响应式：布局合理无错位，底部 nav 冻结可见 ✅
+  * 控制台无 error/warn
+- 清理测试数据恢复干净初始态
+
+Stage Summary:
+- Sprint 3 全部交付：今日任务（CRUD+分组+视角化文案）+ 番茄钟（25/5/15 标准番茄法+圆形进度+段完成持久化+任务联动）+ 首页概览接真实数据 + 首页快捷入口激活
+- 底部 nav 从 4 可用变 4 可用（任务替换原番茄占位），首页功能入口 3 个标"已上线"可跳转
+- 工程校验：ESLint 0 error 0 warning，dev:3000 + chat-service:3003 常驻
+- 关键架构：番茄钟 store/组件职责分离（store 持计时纯逻辑+lastCompletedSeq 信号，组件 effect 触发 POST+回调）；任务与番茄钟通过 activeTaskId/onPomodoroComplete 联动
+- 待后续 Sprint：每日留言、心情记录、学习统计、姐姐后台、AI 总结

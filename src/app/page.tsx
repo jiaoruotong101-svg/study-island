@@ -7,12 +7,16 @@ import { CompanionQuote } from "@/components/home/companion-quote";
 import { QuickEntryGrid } from "@/components/home/quick-entry-grid";
 import { MistakeSection } from "@/components/mistakes/mistake-section";
 import { ChatSection } from "@/components/chat/chat-section";
+import { TaskSection } from "@/components/tasks/task-section";
 import { useUserStore } from "@/store/user-store";
 import { useNavStore } from "@/store/nav-store";
 
 export default function HomePage() {
   const activeTab = useNavStore((s) => s.activeTab);
 
+  if (activeTab === "tasks") {
+    return <TaskSection />;
+  }
   if (activeTab === "mistakes") {
     return <MistakeSection />;
   }

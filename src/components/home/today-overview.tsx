@@ -1,27 +1,42 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { ListChecks, Timer, Smile } from "lucide-react";
-import type { TodayOverview } from "@/lib/types";
 import { useUserStore } from "@/store/user-store";
 import { GlassCard } from "@/components/ui/glass-card";
+import type { TodayOverviewData } from "@/lib/task-types";
 
 /**
  * 今日概览。
  *
- * Sprint 1 先用初始化演示数据（产品定位允许的"初始化演示数据"例外），
- * 后续 Sprint 接入真实数据库后替换为接口数据，组件结构不变。
+ * 数据来自 /api/today-overview（真实聚合）。
+ * 心情卡片暂用占位（心情记录为后续 Sprint）。
  */
-const DEMO_OVERVIEW: TodayOverview = {
-  pendingTaskCount: 4,
-  completedTaskCount: 2,
-  focusMinutes: 75,
-  mood: "平静",
+const FALLBACK: TodayOverviewData = {
+  pendingTaskCount: 0,
+  completedTaskCount: 0,
+  focusMinutes: 0,
 };
 
 export function TodayOverview() {
   const role = useUserStore((s) => s.currentUser.role);
-  const data = DEMO_OVERVIEW;
+  const [data, setData] = useState<TodayOverviewData>(FALLBACK);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/today-overview", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: TodayOverviewData) => {
+        if (!cancelled) setData(d);
+      })
+      .catch(() => {
+        /* 静默回退 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const cards = [
     {
@@ -49,8 +64,8 @@ export function TodayOverview() {
       key: "mood",
       icon: Smile,
       label: "当前心情",
-      value: data.mood ?? "—",
-      hint: "今天感觉怎么样",
+      value: "—",
+      hint: "即将上线",
     },
   ];
 
