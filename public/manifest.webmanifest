@@ -1,0 +1,18 @@
+{
+  "name": "学习小岛",
+  "short_name": "小岛",
+  "description": "一个只属于姐姐和妹妹的学习陪伴小岛",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f5ef",
+  "theme_color": "#7aa881",
+  "icons": [
+    {
+      "src": "/icon-leaf.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
