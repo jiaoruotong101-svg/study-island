@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 
 /**
  * 错题记录 API —— 列表 / 新建
  *
- * - GET  /api/mistakes         返回全部错题（按 createdAt desc），每条带 url
+ * - GET  /api/mistakes         返回当前配对的全部错题（按 createdAt desc），每条带 url
  * - POST /api/mistakes         新建一条错题记录
+ *
+ * 多对隔离：所有读写都按当前账号的 pairId 过滤。
  *
  * runtime=nodejs：与文件系统无关，但保持与其他错题接口一致以便日后扩展。
  */
@@ -93,8 +96,18 @@ interface CreateBody {
 /* ============ GET 列表 ============ */
 
 export async function GET() {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   try {
     const records = await db.mistakeRecord.findMany({
+      where: { pairId },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(records.map(toDTO));
@@ -110,6 +123,15 @@ export async function GET() {
 /* ============ POST 新建 ============ */
 
 export async function POST(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   let body: CreateBody;
   try {
     body = (await req.json()) as CreateBody;
@@ -158,6 +180,7 @@ export async function POST(req: NextRequest) {
         note,
         subject,
         createdBy,
+        pairId,
       },
     });
     return NextResponse.json(toDTO(created), { status: 201 });

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 
 /**
  * 聊天消息 API —— 历史拉取 / 新建持久化。
  *
  * - GET  /api/chat/messages?limit=100  按 createdAt asc 返回，每条带 url
  * - POST /api/chat/messages             新建一条消息，返回完整记录
+ *
+ * 多对隔离：所有读写都按当前账号的 pairId 过滤。
  *
  * 与 socket.io 中继的关系：本接口只管"持久化"，
  * 实时分发由 mini-services/chat-service (端口 3003) 负责。
@@ -94,9 +97,19 @@ interface CreateBody {
 /* ============ GET 历史 ============ */
 
 export async function GET(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   const limit = parseLimit(req.nextUrl.searchParams.get("limit"));
   try {
     const records = await db.chatMessage.findMany({
+      where: { pairId },
       orderBy: { createdAt: "asc" },
       take: limit,
     });
@@ -113,6 +126,15 @@ export async function GET(req: NextRequest) {
 /* ============ POST 新建 ============ */
 
 export async function POST(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   let body: CreateBody;
   try {
     body = (await req.json()) as CreateBody;
@@ -167,7 +189,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const created = await db.chatMessage.create({
-      data: { senderRole, type, content, filePath, duration },
+      data: { senderRole, type, content, filePath, duration, pairId },
     });
     return NextResponse.json(toDTO(created), { status: 201 });
   } catch (err) {

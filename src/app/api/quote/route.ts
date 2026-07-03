@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 
 /**
  * 首页小岛留言（共享语录）。
  *
- * 单例：固定 id = "island-quote"，姐姐和妹妹都能改。
- * - GET：取当前留言；无则返回 null（前端回退到默认语录库）
+ * 多对隔离：每对 pair 一条留言，按 pairId @unique 唯一。
+ * - GET：取当前配对的留言；无则返回 null（前端回退到默认语录库）
  * - PUT：upsert 更新，作者视角由请求体 authorRole 决定
+ *   where: { pairId }，create/update 均带 pairId
  *
  * 实时同步由 chat-service socket 广播 quote:updated 事件，
  * 本接口只负责持久化。
@@ -14,18 +16,34 @@ import { db } from "@/lib/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const QUOTE_ID = "island-quote";
-
 function isValidRole(v: unknown): v is "sister" | "younger" {
   return v === "sister" || v === "younger";
 }
 
 export async function GET() {
-  const row = await db.homeQuote.findUnique({ where: { id: QUOTE_ID } });
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
+  const row = await db.homeQuote.findUnique({ where: { pairId } });
   return NextResponse.json({ quote: row });
 }
 
 export async function PUT(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -62,9 +80,9 @@ export async function PUT(req: NextRequest) {
   }
 
   const quote = await db.homeQuote.upsert({
-    where: { id: QUOTE_ID },
+    where: { pairId },
     update: { content: content.trim(), authorRole },
-    create: { id: QUOTE_ID, content: content.trim(), authorRole },
+    create: { pairId, content: content.trim(), authorRole },
   });
   return NextResponse.json({ ok: true, quote });
 }

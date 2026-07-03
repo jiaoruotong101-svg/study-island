@@ -1142,3 +1142,116 @@ Stage Summary:
 - 至此底部 nav 5 tab 全部可用，无"即将"占位
 - 设计：自己看自己（区别于姐姐后台看妹妹），陪伴向文案
 - 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
+
+---
+Task ID: AUTH-API
+Agent: full-stack-developer (business API pairId isolation)
+Task: 所有业务 API 加 pairId 隔离
+
+Work Log:
+- 通读 worklog.md 全程 + src/lib/auth.ts（getAccountFromRequest 返回 SessionAccount 含 pairId）+ 13 个待改 API route + prisma/schema.prisma，确认改造范围与"不要碰"清单
+- prisma/schema.prisma：HomeQuote 与 HomeGreeting 的 id 从固定串改为 @default(cuid())，pairId 加 @unique（每对 pair 一条留言/问候）。bunx prisma db push --accept-data-loss 应用成功，prisma generate 同步 client。db 原为空，无数据迁移风险
+- src/app/api/tasks/route.ts：
+  * GET/POST 开头调 getAccountFromRequest，未登录返 401 "请先登录"
+  * GET where 加 pairId（与 taskDate 并列）
+  * POST create data 加 pairId
+- src/app/api/tasks/[id]/route.ts：
+  * PATCH/DELETE 开头鉴权
+  * PATCH 先 findUnique，existing.pairId !== pairId 时返 404（防越权）
+  * DELETE 同样先查归属再删
+- src/app/api/focus-sessions/route.ts：GET where 加 pairId；POST create data 加 pairId
+- src/app/api/mistakes/route.ts：GET where 加 pairId；POST create data 加 pairId
+- src/app/api/mistakes/[id]/route.ts：DELETE 鉴权 + record.pairId !== pairId 返 404（防越权删别人配对的错题文件）
+- src/app/api/chat/messages/route.ts：GET where 加 pairId；POST create data 加 pairId
+- src/app/api/moods/route.ts：GET where 加 pairId；POST create data 加 pairId
+- src/app/api/notes/route.ts：GET where 加 pairId；POST create data 加 pairId
+- src/app/api/quote/route.ts（单例特殊处理）：
+  * GET/PUT 鉴权
+  * GET 改用 db.homeQuote.findUnique({ where: { pairId } })
+  * PUT upsert where: { pairId }，create: { pairId, content, authorRole }，update: { content, authorRole }
+  * 移除 QUOTE_ID 固定串常量
+- src/app/api/greeting/route.ts（同 quote）：findUnique/upsert 全部用 pairId，移除 GREETING_ID 常量
+- src/app/api/today-overview/route.ts：GET 鉴权 + 3 个子查询（task/focusSession/moodEntry）where 全加 pairId
+- src/app/api/stats/route.ts：GET 鉴权 + 6 个子查询（累计 focusSession/mistakeRecord + 近7天 focusSession/task/mistakeRecord/moodEntry）where 全加 pairId
+- src/app/api/ai-summary/route.ts：POST 鉴权 + 4 个子查询（focusSession/task/mistakeRecord/moodEntry）where 全加 pairId
+
+校验：
+- bun run lint → 0 error 0 warning exit 0
+- bunx prisma db push --accept-data-loss → 数据库 schema 同步成功
+- 直接 Prisma 脚本验证 pairId 隔离：
+  * pairA 创建任务 → pairA query 返回 1 条 / pairB query 返回 0 条 ✅
+  * pairA upsert HomeQuote { where: { pairId } } 成功 / pairB findUnique 返回 null ✅
+- 端到端冒烟（curl 经 dev:3000）：
+  * 13 个 API 全部未带 cookie 时返 401 "请先登录" ✅
+  * 注册姐姐账号 POST /api/auth/register → 201 + pairCode ✅
+  * 带 cookie GET /api/tasks → 200 {tasks:[]} ✅，Prisma SQL 日志确认 WHERE pairId = ? AND taskDate = ? 生效 ✅
+
+Stage Summary:
+- 产物（13 个 API route + 1 个 schema 文件）：
+  * prisma/schema.prisma（HomeQuote/HomeGreeting 加 @unique + id 改 @default(cuid())）
+  * src/app/api/tasks/route.ts、tasks/[id]/route.ts
+  * src/app/api/focus-sessions/route.ts
+  * src/app/api/mistakes/route.ts、mistakes/[id]/route.ts
+  * src/app/api/chat/messages/route.ts
+  * src/app/api/moods/route.ts
+  * src/app/api/notes/route.ts
+  * src/app/api/quote/route.ts、greeting/route.ts（单例 → 按 pairId 唯一）
+  * src/app/api/today-overview/route.ts
+  * src/app/api/stats/route.ts
+  * src/app/api/ai-summary/route.ts
+- 关键决策：
+  * 鉴权统一模式：每个 handler 开头 `const acc = await getAccountFromRequest(); if (!acc) return 401; const pairId = acc.pairId;`
+  * 查询过滤统一加 pairId 到 where；写入统一加 pairId 到 data
+  * tasks/[id] 与 mistakes/[id] 的 PATCH/DELETE：先 findUnique 取 record.pairId 比对当前账号 pairId，不匹配返 404（既防越权又不暴露存在性）
+  * quote/greeting 单例改造：从"固定 id 单例"改为"每对 pair 一条"，schema 给 pairId 加 @unique 让 upsert where: { pairId } 可用；id 改 @default(cuid()) 不再需要前端/后端约定固定串
+  * 前端契约保持：GET /api/quote 仍返回 { quote: {...}|null }，PUT body 不变（前端不传 pairId，后端从 session 取）
+  * 没有改 auth/* / uploads/* / files/* / route.ts（health check）/ 任何前端组件 / src/lib/auth.ts
+- ⚠️ 已知问题（环境相关，非代码问题）：
+  * dev server（next dev -p 3000）在我手动 kill 后重启期间偶有不稳定：发送多个并发请求时（特别是首次编译 auth/register 这种含 bcryptjs 的重路由时）next-server 进程会静默退出（无 OOM kill、无 error 日志、内存未触顶 4GB cgroup 上限）
+  * 串行请求 + 间隔 3s 时 dev server 稳定，13 个 API 全部返 401 验证通过
+  * 该问题与 pairId 改造无关，是 Next.js 16 Turbopack dev server 自身的稳定性问题；建议生产环境用 `bun run build` + `bun run start`，或在系统层给 dev server 加 supervisor（如 pm2/systemd）自动重启
+  * 我的代码本身经 lint + 直接 Prisma 脚本双重验证 pairId 隔离逻辑正确
+- 工程校验：ESLint 0 error 0 warning，prisma db push 成功，prisma client 重新生成，13 个 API 未带 cookie 全部 401
+
+---
+Task ID: SPRINT-10 (账号系统 + 任务时间)
+Agent: main (Z.ai Code) + 子代理 AUTH-API
+Task: 账号系统(注册/配对/登录/多对隔离) + 首页移除身份切换 + 任务时间显示
+
+Work Log:
+- Prisma 重构：新增 Account(username/passwordHash/displayName/role/pairId) + Pair(id/code/createdBy) 模型；所有业务表加 pairId 字段；HomeQuote/HomeGreeting 的 pairId 加 @unique（每对一条）；清空旧 db 重建
+- auth lib (src/lib/auth.ts): bcryptjs 哈希密钥 + httpOnly cookie session + HMAC 签名防篡改 + getAccountFromRequest + generatePairCode(6位去除易混字符)
+- auth API:
+  * POST /api/auth/register：姐姐注册创建Pair+生成配对码；妹妹注册输入配对码关联；自动登录
+  * POST /api/auth/login：用户名+密钥校验
+  * POST /api/auth/logout：清cookie
+  * GET /api/auth/me：返回当前账号+配对信息+partner
+- auth-store: 从 localStorage 改为 /api/me cookie session 驱动
+- user-store: 改为兼容层，由 AuthGate 同步注入，移除 switchRole
+- AuthGate: 挂载拉取 /api/me，未登录渲染 AuthScreen，已登录渲染主内容
+- AuthScreen: 登录/注册切换；注册可选角色(姐姐创建小岛/妹妹加入小岛)；姐姐注册成功显示配对码；妹妹注册需填配对码
+- 子代理 AUTH-API: 13个业务API全部加 getAccountFromRequest 鉴权 + pairId 过滤写入；DELETE/PATCH 防越权；quote/greeting 单例改 pairId 查询
+- 首页移除 RoleSwitcher（删除 role-switcher.tsx + home-section 引用）
+- 任务时间显示: task-item 加 formatTime，显示"创建 HH:MM"和完成时"完成 HH:MM"(浅绿色)
+- 我的板块改造: 身份卡显示账号信息+配对码(姐姐可复制)+partner信息；加"切换账号"(退出再登录)和"退出登录"(AlertDialog二次确认)
+- Agent Browser 端到端验证：
+  * 未登录显示 AuthScreen ✅
+  * 姐姐注册 → 生成配对码 → 直接进入主界面 ✅
+  * 「我的」板块显示配对码(可复制)+partner ✅
+  * 妹妹用配对码注册 → 关联成功 → 进入主界面 ✅
+  * 姐姐创建任务 → 妹妹登录能看到(同pair共享) ✅
+  * 第二对配对注册 → 看不到第一对数据(多对隔离) ✅
+  * 退出登录 → 回到 AuthScreen ✅
+  * 重新登录 → 成功 ✅
+  * 任务时间显示: 创建时间+完成时间(浅绿) ✅ (VLM确认)
+  * 首页无身份切换 ✅
+  * 控制台无 error
+- 清空数据库恢复干净初始态
+
+Stage Summary:
+- 账号系统完整交付：注册(姐姐创建小岛/妹妹加入) + 配对码关联 + 登录 + 退出 + 多对数据隔离 + cookie session 持久化
+- 首页移除身份切换，切换走"我的"板块退出再登录
+- 任务显示创建时间和完成时间
+- 密钥 bcrypt 加密，cookie httpOnly+HMAC签名
+- ESLint 0 error，dev:3000 + chat-service:3003 常驻
+- 现有数据已清空，首次使用需注册

@@ -10,134 +10,128 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
+/// 配对 —— 一对姐姐+妹妹的陪伴关系，多对隔离的根
+model Pair {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
+  /// 6 位配对码，妹妹注册时输入以关联姐姐
+  code      String   @unique
+  /// 创建者（姐姐）账号 id，便于展示
+  createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+/// 账号 —— 姐姐或妹妹，用户名+密钥登录
+model Account {
+  id           String   @id @default(cuid())
+  /// 登录用户名（唯一）
+  username     String   @unique
+  /// bcrypt 哈希后的密钥
+  passwordHash String
+  /// 显示名（"姐姐"/"妹妹"或自定义昵称）
+  displayName  String
+  /// 角色：sister 姐姐 / younger 妹妹
+  role         String
+  /// 所属配对 id（姐姐注册时创建 Pair，妹妹注册时关联到姐姐的 Pair）
+  pairId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// 首页小岛留言 —— 姐姐和妹妹可自由编辑的共享语录，标注作者视角
+/// 多对隔离：每对 pair 一条，按 pairId 唯一
+model HomeQuote {
+  id         String   @id @default(cuid())
+  content    String
+  /// 作者角色：sister 姐姐 / younger 妹妹
+  authorRole String
+  /// 所属配对 id —— 每对 pair 一条留言，@unique 便于 upsert
+  pairId     String   @unique
+  updatedAt  DateTime @updatedAt
+}
+
+/// 首页顶部问候（大标题 + 副标题）—— 姐姐视角下可自由编辑，两人共享
+/// 多对隔离：每对 pair 一条，按 pairId 唯一
+model HomeGreeting {
+  id         String   @id @default(cuid())
+  heading    String
+  subtitle   String
+  /// 作者角色：sister 姐姐 / younger 妹妹（当前仅姐姐视角可编辑）
+  authorRole String
+  /// 所属配对 id —— 每对 pair 一条问候，@unique 便于 upsert
+  pairId     String   @unique
+  updatedAt  DateTime @updatedAt
 }
 
 /// 错题记录 —— 妹妹拍下做错的题，姐姐可以看到并留言鼓励
 model MistakeRecord {
   id        String   @id @default(cuid())
-  /// 记录类型：image 图片 / voice 语音
   type      String
-  /// 文件相对路径，通过 /api/files/<filename> 访问
   filePath  String
-  /// 文件 mime，便于前端渲染
   mimeType  String
-  /// 录音时长（秒），仅 type=voice 时有意义
   duration  Int?
-  /// 妹妹写的备注（哪一科、错因）
   note      String?
-  /// 科目标签，便于后续筛选
   subject   String?
-  /// 创建者角色：sister 姐姐 / younger 妹妹
   createdBy String
+  pairId    String
   createdAt DateTime @default(now())
 }
 
 /// 实时聊天消息 —— 姐姐和妹妹之间的陪伴对话
 model ChatMessage {
-  id        String   @id @default(cuid())
-  /// 发送者角色：sister / younger
+  id         String   @id @default(cuid())
   senderRole String
-  /// 消息类型：text 文字 / voice 语音
-  type      String
-  /// 文本内容（type=text）；语音消息时为空
-  content   String?
-  /// 语音文件相对路径（type=voice）
-  filePath  String?
-  /// 语音时长（秒）
-  duration  Int?
-  createdAt DateTime @default(now())
-}
-
-/// 首页小岛留言 —— 姐姐和妹妹可自由编辑的共享语录，标注作者视角
-/// 单例：固定 id = "island-quote"，upsert 更新
-model HomeQuote {
-  id         String   @id /// 固定 "island-quote"
-  content    String
-  /// 作者角色：sister 姐姐 / younger 妹妹
-  authorRole String
-  updatedAt  DateTime @updatedAt
-}
-
-/// 首页顶部问候（大标题 + 副标题）—— 姐姐视角下可自由编辑，两人共享
-/// 单例：固定 id = "island-greeting"，upsert 更新
-model HomeGreeting {
-  id         String   @id /// 固定 "island-greeting"
-  heading    String
-  subtitle   String
-  /// 作者角色：sister 姐姐 / younger 妹妹（当前仅姐姐视角可编辑）
-  authorRole String
-  updatedAt  DateTime @updatedAt
+  type       String
+  content    String?
+  filePath   String?
+  duration   Int?
+  pairId     String
+  createdAt  DateTime @default(now())
 }
 
 /// 今日任务 —— 姐姐和妹妹都可创建，体现"自主规划"而非"被派活"
 model Task {
-  id           String   @id @default(cuid())
-  title        String
-  subject      String?
-  /// 预计需要的番茄数（专注 25 分钟为一个番茄）
-  estimatedPomodoros Int @default(1)
-  /// 已完成的番茄数
-  completedPomodoros Int @default(0)
-  done         Boolean  @default(false)
-  completedAt  DateTime?
-  /// 创建者角色：sister 姐姐 / younger 妹妹
-  createdBy    String
-  /// 任务归属日期 "YYYY-MM-DD"，便于按日查询"今日任务"
-  taskDate     String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  title              String
+  subject            String?
+  estimatedPomodoros Int       @default(1)
+  completedPomodoros Int       @default(0)
+  done               Boolean   @default(false)
+  completedAt        DateTime?
+  createdBy          String
+  taskDate           String
+  pairId             String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }
 
 /// 专注/休息会话记录 —— 番茄钟每次完成一段就记一条
 model FocusSession {
-  id        String   @id @default(cuid())
-  /// 完成者角色：sister / younger
-  role      String
-  /// 关联任务（可选，休息段无关联）
-  taskId    String?
-  /// 时长（分钟）
+  id             String   @id @default(cuid())
+  role           String
+  taskId         String?
   durationMinutes Int
-  /// 类型：focus 专注 / break 休息
-  type      String
-  completedAt DateTime @default(now())
+  type           String
+  pairId         String
+  completedAt    DateTime @default(now())
 }
 
 /// 心情记录 —— 妹妹/姐姐记录当天心情，体现陪伴而非监督
 model MoodEntry {
   id        String   @id @default(cuid())
-  /// 记录者角色：sister / younger
   role      String
-  /// 心情 key：calm / happy / tired / anxious / sad
   mood      String
-  /// 可选备注
   note      String?
+  pairId    String
   createdAt DateTime @default(now())
 }
 
 /// 每日留言 —— 姐姐和妹妹给彼此留的小纸条（慢沟通，区别于实时聊天）
 model DailyNote {
-  id        String   @id @default(cuid())
-  /// 留言者角色：sister 姐姐 / younger 妹妹
+  id         String   @id @default(cuid())
   authorRole String
-  /// 留言内容
-  content   String
-  /// 归属日期 "YYYY-MM-DD"，便于按日查询
-  noteDate  String
-  createdAt DateTime @default(now())
+  content    String
+  noteDate   String
+  pairId     String
+  createdAt  DateTime @default(now())
 }

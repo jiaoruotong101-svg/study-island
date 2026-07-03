@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 import { MOOD_OPTIONS, getMoodOption } from "@/lib/mood-types";
 import type {
   DailyFocusStat,
@@ -15,6 +16,8 @@ import type {
  * 近 7 天每日专注趋势 + 任务完成 + 心情分布 + 科目分布。
  *
  * 体现"陪伴而非监督"：只看坚持的轨迹，不做排名/对比/警告。
+ *
+ * 多对隔离：所有子查询都按当前账号的 pairId 过滤。
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +46,15 @@ function lastNDays(n: number): Date[] {
 const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 export async function GET(_req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   const days = lastNDays(7);
   const startDate = days[0]!;
   const start = new Date(startDate);
@@ -50,7 +62,7 @@ export async function GET(_req: NextRequest) {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
 
-  // 并行查询：累计 + 近7天
+  // 并行查询：累计 + 近7天（全部按 pairId 过滤）
   const [
     allFocusSessions,
     allMistakes,
@@ -59,19 +71,19 @@ export async function GET(_req: NextRequest) {
     weeklyMistakes,
     weeklyMoods,
   ] = await Promise.all([
-    db.focusSession.findMany({ where: { type: "focus" } }),
-    db.mistakeRecord.findMany(),
+    db.focusSession.findMany({ where: { pairId, type: "focus" } }),
+    db.mistakeRecord.findMany({ where: { pairId } }),
     db.focusSession.findMany({
-      where: { type: "focus", completedAt: { gte: start, lte: end } },
+      where: { pairId, type: "focus", completedAt: { gte: start, lte: end } },
     }),
     db.task.findMany({
-      where: { taskDate: { in: days.map(dateStr) } },
+      where: { pairId, taskDate: { in: days.map(dateStr) } },
     }),
     db.mistakeRecord.findMany({
-      where: { createdAt: { gte: start, lte: end } },
+      where: { pairId, createdAt: { gte: start, lte: end } },
     }),
     db.moodEntry.findMany({
-      where: { createdAt: { gte: start, lte: end } },
+      where: { pairId, createdAt: { gte: start, lte: end } },
     }),
   ]);
 

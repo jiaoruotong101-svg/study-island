@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { RoleSwitcher } from "@/components/home/role-switcher";
 import { TodayOverview } from "@/components/home/today-overview";
 import { CompanionQuote } from "@/components/home/companion-quote";
 import { QuickEntryGrid } from "@/components/home/quick-entry-grid";
@@ -112,8 +111,6 @@ export function HomeSection() {
       <CompanionQuote />
 
       <TodayOverview />
-
-      <RoleSwitcher />
 
       <QuickEntryGrid />
 

@@ -20,6 +20,20 @@ import {
 import { cn } from "@/lib/utils";
 import type { Task, TaskItemHandlers } from "./task-section.types";
 
+/** 格式化时间为 HH:mm（同一天）或 M月D日 HH:mm（不同天）。 */
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  if (sameDay) return `${hh}:${mm}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
+}
+
 /**
  * 单条任务项。
  *
@@ -119,6 +133,30 @@ export function TaskItem({ task, active, handlers }: TaskItemProps) {
             ·
           </span>
           <span>{task.createdBy === "younger" ? "妹妹 列" : "姐姐 列"}</span>
+          {task.createdAt && (
+            <>
+              <span className="text-muted-foreground/50" aria-hidden>
+                ·
+              </span>
+              <span className="inline-flex items-center gap-0.5">
+                创建
+                <span className="font-num">{formatTime(task.createdAt)}</span>
+              </span>
+            </>
+          )}
+          {task.done && task.completedAt && (
+            <>
+              <span className="text-muted-foreground/50" aria-hidden>
+                ·
+              </span>
+              <span className="inline-flex items-center gap-0.5">
+                完成
+                <span className="font-num text-leaf">
+                  {formatTime(task.completedAt)}
+                </span>
+              </span>
+            </>
+          )}
         </div>
       </div>
 

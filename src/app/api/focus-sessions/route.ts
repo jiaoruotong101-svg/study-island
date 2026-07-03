@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 import type { CreatorRole } from "@/lib/task-types";
 
 /**
@@ -9,6 +10,8 @@ import type { CreatorRole } from "@/lib/task-types";
  *   可选 ?role=sister|younger 进一步过滤
  * - POST：记录一次完成的会话（番茄钟结束时调用）
  *   { role, taskId?, durationMinutes, type: "focus"|"break" }
+ *
+ * 多对隔离：所有读写都按当前账号的 pairId 过滤。
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +28,15 @@ function isValidRole(v: unknown): v is CreatorRole {
 }
 
 export async function GET(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   const date = req.nextUrl.searchParams.get("date") ?? todayStr();
   const role = req.nextUrl.searchParams.get("role");
 
@@ -34,6 +46,7 @@ export async function GET(req: NextRequest) {
 
   const sessions = await db.focusSession.findMany({
     where: {
+      pairId,
       completedAt: { gte: start, lte: end },
       ...(role && isValidRole(role) ? { role } : {}),
     },
@@ -43,6 +56,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -81,7 +103,7 @@ export async function POST(req: NextRequest) {
   const tid = typeof taskId === "string" && taskId.length > 0 ? taskId : null;
 
   const session = await db.focusSession.create({
-    data: { role, taskId: tid, durationMinutes: dur, type },
+    data: { role, taskId: tid, durationMinutes: dur, type, pairId },
   });
   return NextResponse.json({ ok: true, session }, { status: 201 });
 }

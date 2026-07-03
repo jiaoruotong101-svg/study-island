@@ -1,10 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { motion } from "framer-motion";
 import {
-  User,
-  Repeat,
   Sun,
   Moon,
   Monitor,
@@ -14,29 +12,47 @@ import {
   Flame,
   ChevronRight,
   Heart,
+  LogOut,
+  Repeat,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useAuthStore } from "@/store/auth-store";
 import { useUserStore } from "@/store/user-store";
 import { useNavStore } from "@/store/nav-store";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import type { StatsData } from "@/lib/stats-types";
 
 /**
  * 「我的」板块 —— 个人中心。
  *
- * 区别于姐姐后台（姐姐看妹妹），「我的」是自己看自己：
- *   - 身份卡：当前身份 + 一键切换
- *   - 我的概况：累计专注/番茄/坚持天数/错题（复用 /api/stats）
- *   - 外观设置：浅色/深色/跟随系统
- *   - 小岛设置：番茄钟时长快捷入口（跳转任务 section）
- *   - 关于小岛：产品理念 + 版本
+ * 身份切换已改为账号体系：
+ *   - 退出登录 → 回到登录页
+ *   - 切换账号 = 退出当前 + 用另一账号登录（在登录页操作）
+ *   - 配对码展示（姐姐视角，方便告诉妹妹）
  */
 export function MeSection() {
-  const currentUser = useUserStore((s) => s.currentUser);
-  const switchRole = useUserStore((s) => s.switchRole);
+  const account = useAuthStore((s) => s.account);
+  const pair = useAuthStore((s) => s.pair);
+  const logout = useAuthStore((s) => s.logout);
   const setTab = useNavStore((s) => s.setTab);
+  const { toast } = useToast();
 
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,15 +77,28 @@ export function MeSection() {
     };
   }, []);
 
-  const isSister = currentUser.role === "sister";
-  const otherRole = isSister ? "younger" : "sister";
+  if (!account) return null;
+
+  const isSister = account.role === "sister";
+
+  async function handleLogout() {
+    await logout();
+    toast({ description: "已退出小岛" });
+  }
+
+  async function handleSwitchAccount() {
+    await logout();
+    toast({ description: "已退出，请用另一个账号登录" });
+  }
 
   return (
     <section aria-label="我的" className="space-y-5 sm:space-y-6">
       {/* 标题区 */}
       <header className="px-1">
         <h2 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-foreground">
-          <User className="h-6 w-6 text-leaf" aria-hidden />
+          <span className="text-leaf" aria-hidden>
+            {isSister ? "🌷" : "🌱"}
+          </span>
           我的
         </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
@@ -79,11 +108,15 @@ export function MeSection() {
         </p>
       </header>
 
-      {/* 身份卡 */}
+      {/* 身份卡 + 配对信息 */}
       <IdentityCard
-        name={currentUser.name}
-        role={currentUser.role}
-        onSwitch={() => switchRole(otherRole)}
+        displayName={account.displayName}
+        username={account.username}
+        role={account.role}
+        pairCode={pair?.code ?? null}
+        partnerName={pair?.partner?.displayName ?? null}
+        onSwitch={handleSwitchAccount}
+        onLogout={handleLogout}
       />
 
       {/* 我的概况 */}
@@ -130,17 +163,35 @@ export function MeSection() {
 /* ---------------------------- 身份卡 ---------------------------- */
 
 function IdentityCard({
-  name,
+  displayName,
+  username,
   role,
+  pairCode,
+  partnerName,
   onSwitch,
+  onLogout,
 }: {
-  name: string;
+  displayName: string;
+  username: string;
   role: "sister" | "younger";
+  pairCode: string | null;
+  partnerName: string | null;
   onSwitch: () => void;
+  onLogout: () => void;
 }) {
   const isSister = role === "sister";
-  const emoji = isSister ? "🌷" : "🌱";
-  const desc = isSister ? "陪妹妹走过高三这一年" : "高三在读，慢慢来";
+  const [copied, setCopied] = useState(false);
+
+  async function copyCode() {
+    if (!pairCode) return;
+    try {
+      await navigator.clipboard.writeText(pairCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
 
   return (
     <motion.div
@@ -154,28 +205,130 @@ function IdentityCard({
             className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-leaf-soft/60 text-3xl"
             aria-hidden
           >
-            {emoji}
+            {isSister ? "🌷" : "🌱"}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="text-xl font-semibold text-foreground">{name}</h3>
+              <h3 className="text-xl font-semibold text-foreground">
+                {displayName}
+              </h3>
               <span className="rounded-full bg-leaf-soft/70 px-2.5 py-0.5 text-xs font-medium text-leaf">
                 {isSister ? "陪伴者" : "高三在读"}
               </span>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
+            <p className="mt-1 font-num text-xs text-muted-foreground">
+              @{username}
+            </p>
+            {partnerName && (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                与「{partnerName}」同在一个小岛
+              </p>
+            )}
           </div>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onSwitch}
-          className="mt-4 w-full text-muted-foreground hover:text-foreground"
-        >
-          <Repeat className="mr-1.5 h-3.5 w-3.5" />
-          切到{isSister ? "妹妹" : "姐姐"}视角
-        </Button>
+
+        {/* 配对码（姐姐视角展示，方便告诉妹妹） */}
+        {isSister && pairCode && (
+          <div className="mt-4 rounded-xl bg-leaf-soft/30 px-4 py-3">
+            <p className="text-xs text-muted-foreground">小岛配对码</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="font-num text-lg font-bold tracking-[0.2em] text-leaf">
+                {pairCode}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={copyCode}
+                className="h-7 gap-1 text-muted-foreground"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3 w-3" /> 已复制
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" /> 复制
+                  </>
+                )}
+              </Button>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground/80">
+              把这个码告诉妹妹，她注册时填入就能加入你的小岛
+            </p>
+          </div>
+        )}
+
+        {/* 操作按钮 */}
+        <div className="mt-4 flex gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="flex-1 text-muted-foreground hover:text-foreground"
+              >
+                <Repeat className="mr-1.5 h-3.5 w-3.5" />
+                切换账号
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>切换到另一个账号？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  将退出当前账号，回到登录页。请用另一个账号（姐姐或妹妹）的用户名和密钥登录。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>再想想</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onSwitch();
+                  }}
+                  className="bg-leaf text-primary-foreground hover:bg-leaf/90"
+                >
+                  退出并切换
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="flex-1 text-muted-foreground hover:text-destructive"
+              >
+                <LogOut className="mr-1.5 h-3.5 w-3.5" />
+                退出登录
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>退出小岛？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  退出后需要重新登录才能回到小岛。你的数据都还在，不用担心。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>留在小岛</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onLogout();
+                  }}
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                >
+                  退出
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </GlassCard>
     </motion.div>
   );
@@ -272,8 +425,6 @@ function MyOverview({
 
 function AppearanceCard() {
   const { theme, setTheme } = useTheme();
-  // next-themes 在客户端挂载后才有 theme；用 useSyncExternalStore 做"已挂载"检测，
-  // 避免 effect 内同步 setState 的 lint 报错与 hydration mismatch。
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -293,9 +444,7 @@ function AppearanceCard() {
 
   return (
     <GlassCard pad="md" className="space-y-3">
-      <h3 className="px-1 text-sm font-medium text-muted-foreground">
-        外观
-      </h3>
+      <h3 className="px-1 text-sm font-medium text-muted-foreground">外观</h3>
       <div className="grid grid-cols-3 gap-2">
         {options.map((opt) => {
           const active = mounted && theme === opt.value;
@@ -307,7 +456,7 @@ function AppearanceCard() {
               onClick={() => setTheme(opt.value)}
               aria-pressed={active}
               disabled={!mounted}
-              className={cnTheme(
+              className={cn(
                 "flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-xs transition-colors",
                 active
                   ? "border-leaf bg-leaf-soft text-leaf"
@@ -324,11 +473,6 @@ function AppearanceCard() {
   );
 }
 
-// 轻量 cn（避免重复 import；与 utils.tsx 的 cn 等价）
-function cnTheme(...inputs: (string | false | undefined)[]): string {
-  return inputs.filter(Boolean).join(" ");
-}
-
 /* ---------------------------- 关于小岛 ---------------------------- */
 
 function AboutCard() {
@@ -343,9 +487,8 @@ function AboutCard() {
           学习小岛
         </p>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          一个只属于姐姐和妹妹的小岛。
-          不是监督，而是陪伴 —— 姐姐一直陪着妹妹高三。
-          慢慢来，每一分钟都算数。
+          一个只属于姐姐和妹妹的小岛。不是监督，而是陪伴 ——
+          姐姐一直陪着妹妹高三。慢慢来，每一分钟都算数。
         </p>
       </div>
       <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">

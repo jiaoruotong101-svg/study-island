@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 import { MOOD_OPTIONS } from "@/lib/mood-types";
 import type { CreatorRole } from "@/lib/mood-types";
 
@@ -9,6 +10,8 @@ import type { CreatorRole } from "@/lib/mood-types";
  * - GET ?date=YYYY-MM-DD：返回该日心情记录（默认今天），createdAt desc
  *   可选 ?role=sister|younger 过滤
  * - POST：新建一条心情记录 { role, mood, note? }
+ *
+ * 多对隔离：所有读写都按当前账号的 pairId 过滤。
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +32,15 @@ function isValidMood(v: unknown): v is string {
 }
 
 export async function GET(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   const date = req.nextUrl.searchParams.get("date") ?? todayStr();
   const role = req.nextUrl.searchParams.get("role");
   const start = new Date(`${date}T00:00:00`);
@@ -36,6 +48,7 @@ export async function GET(req: NextRequest) {
 
   const entries = await db.moodEntry.findMany({
     where: {
+      pairId,
       createdAt: { gte: start, lte: end },
       ...(role && isValidRole(role) ? { role } : {}),
     },
@@ -45,6 +58,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -78,7 +100,7 @@ export async function POST(req: NextRequest) {
       : null;
 
   const entry = await db.moodEntry.create({
-    data: { role, mood, note: safeNote },
+    data: { role, mood, note: safeNote, pairId },
   });
   return NextResponse.json({ ok: true, entry }, { status: 201 });
 }

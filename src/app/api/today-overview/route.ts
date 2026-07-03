@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 import { getMoodOption } from "@/lib/mood-types";
 
 /**
@@ -7,6 +8,8 @@ import { getMoodOption } from "@/lib/mood-types";
  *
  * 返回：今日待完成任务数、已完成任务数、今日专注总分钟数、今日最新心情。
  * 首页 TodayOverview 卡片用此数据。
+ *
+ * 多对隔离：所有子查询都按当前账号的 pairId 过滤。
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,20 +22,33 @@ function todayStr(): string {
 }
 
 export async function GET(_req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   const date = todayStr();
   const start = new Date(`${date}T00:00:00`);
   const end = new Date(`${date}T23:59:59.999`);
 
   const [tasks, focusSessions, latestMood] = await Promise.all([
-    db.task.findMany({ where: { taskDate: date } }),
+    db.task.findMany({ where: { pairId, taskDate: date } }),
     db.focusSession.findMany({
       where: {
+        pairId,
         completedAt: { gte: start, lte: end },
         type: "focus",
       },
     }),
     db.moodEntry.findFirst({
-      where: { createdAt: { gte: start, lte: end } },
+      where: {
+        pairId,
+        createdAt: { gte: start, lte: end },
+      },
       orderBy: { createdAt: "desc" },
     }),
   ]);

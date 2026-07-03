@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 import type { CreatorRole } from "@/lib/task-types";
 
 /**
@@ -10,6 +11,8 @@ import type { CreatorRole } from "@/lib/task-types";
  *
  * 任务归属日期由前端传 taskDate（YYYY-MM-DD），默认今天。
  * 姐姐和妹妹都能创建，体现"自主规划"。
+ *
+ * 多对隔离：所有读写都按当前账号的 pairId 过滤。
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,15 +29,33 @@ function isValidRole(v: unknown): v is CreatorRole {
 }
 
 export async function GET(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   const date = req.nextUrl.searchParams.get("date") ?? todayStr();
   const tasks = await db.task.findMany({
-    where: { taskDate: date },
+    where: { pairId, taskDate: date },
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json({ tasks });
 }
 
 export async function POST(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -104,6 +125,7 @@ export async function POST(req: NextRequest) {
       done: false,
       createdBy,
       taskDate: date,
+      pairId,
     },
   });
   return NextResponse.json({ ok: true, task }, { status: 201 });

@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { unlink } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 
 /**
  * 错题记录单条 API —— 删除
  *
  * - DELETE /api/mistakes/[id]   先删文件（容错），再删库记录
+ *
+ * 多对隔离：先查记录确认 record.pairId === 当前账号 pairId，
+ * 不匹配返回 404，防止越权。
  *
  * runtime=nodejs：涉及 fs。
  */
@@ -28,6 +32,15 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   const { id } = await params;
   if (!id) {
     return NextResponse.json({ error: "缺少 id" }, { status: 400 });
@@ -44,7 +57,8 @@ export async function DELETE(
     );
   }
 
-  if (!record) {
+  // 防越权：记录不存在或不属于当前配对均返 404
+  if (!record || record.pairId !== pairId) {
     return NextResponse.json({ error: "记录不存在" }, { status: 404 });
   }
 

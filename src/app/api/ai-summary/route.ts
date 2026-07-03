@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAccountFromRequest } from "@/lib/auth";
 import { getMoodOption } from "@/lib/mood-types";
 import ZAI from "z-ai-web-dev-sdk";
 
@@ -11,6 +12,8 @@ import ZAI from "z-ai-web-dev-sdk";
  *
  * 设计：不是冰冷的数据报告，是"姐姐一直陪着"的温暖话语。
  * 体现"陪伴而非监督"：鼓励/成长/坚持，禁用催促/警告/排名。
+ *
+ * 多对隔离：所有子查询都按当前账号的 pairId 过滤。
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +50,15 @@ const SYSTEM_PROMPT = `你是一个温柔的学习陪伴助手，专门为姐姐
 8. 用中文，用"妹妹"称呼，不用"她/该用户"`;
 
 export async function POST(req: NextRequest) {
+  const acc = await getAccountFromRequest();
+  if (!acc) {
+    return NextResponse.json(
+      { ok: false, error: "请先登录" },
+      { status: 401 },
+    );
+  }
+  const pairId = acc.pairId;
+
   // 可选 body：days（默认7）
   let days = 7;
   try {
@@ -64,16 +76,21 @@ export async function POST(req: NextRequest) {
   const endDate = new Date();
   endDate.setHours(23, 59, 59, 999);
 
+  // 全部按 pairId 过滤
   const [focusSessions, tasks, mistakes, moods] = await Promise.all([
     db.focusSession.findMany({
-      where: { type: "focus", completedAt: { gte: startDate, lte: endDate } },
+      where: {
+        pairId,
+        type: "focus",
+        completedAt: { gte: startDate, lte: endDate },
+      },
     }),
-    db.task.findMany({ where: { taskDate: { in: dates } } }),
+    db.task.findMany({ where: { pairId, taskDate: { in: dates } } }),
     db.mistakeRecord.findMany({
-      where: { createdAt: { gte: startDate, lte: endDate } },
+      where: { pairId, createdAt: { gte: startDate, lte: endDate } },
     }),
     db.moodEntry.findMany({
-      where: { createdAt: { gte: startDate, lte: endDate } },
+      where: { pairId, createdAt: { gte: startDate, lte: endDate } },
     }),
   ]);
 
