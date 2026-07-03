@@ -1079,3 +1079,33 @@ Stage Summary:
 - 复用5个已有API（today-overview/tasks/moods/mistakes/notes），零新增API
 - 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
 - 仅剩最后一项：AI 总结
+
+---
+Task ID: SPRINT-8 (收官)
+Agent: main (Z.ai Code)
+Task: AI 陪伴总结（最后一项）—— LLM 生成温暖陪伴向总结
+
+Work Log:
+- API POST /api/ai-summary：聚合妹妹近7天数据（专注分钟/番茄数/任务完成/错题/心情分布/科目分布/坚持天数）→ 调 z-ai-web-dev-sdk LLM（system prompt 强制温暖陪伴向，禁用催促/警告/排名词）→ 返回 {ok,summary,meta}
+  * runtime=nodejs, maxDuration=60（LLM 调用可能较慢）
+  * system prompt 明确：语气温暖鼓励、关注坚持不关注完成率、150-250字、2-3段口语化、结尾给姐姐温暖提醒
+  * 失败兜底：LLM 异常返回 502 "AI 暂时不在，稍等再试"
+- 新建 src/components/admin/ai-summary-card.tsx：姐姐视角渲染，"生成 AI 总结"按钮 → 加载态"AI 正在认真看妹妹这段时间的坚持…" → 展示总结正文(whitespace-pre-line) + 元数据小标签(近7天/坚持天数/专注分钟/番茄数) + "重新写"按钮
+- 集成到 admin-section.tsx 底部（最近活动下方、结语上方），仅姐姐视角渲染
+- Agent Browser 端到端验证：
+  * 姐姐视角：AI 卡片在底部，点"生成 AI 总结" → 加载态 → 生成温暖总结 ✅
+  * 总结内容示例："亲爱的姐姐，想和你说说妹妹这周的学习情况…整整七天都在坚持学习…累计专注325分钟…13个番茄…她今天也在努力着，姐姐你也在陪着她，辛苦了。" ✅ 陪伴向、含具体观察、结尾温暖
+  * 元数据标签正确显示 ✅
+  * "重新写"按钮可重新生成 ✅
+  * 妹妹视角：AI 卡片不渲染（权限守卫拦截）✅
+  * VLM 确认视觉：总结正文/元数据标签/重新写按钮/玻璃质感/排版无问题 ✅
+  * 移动端390：AI卡在底部、布局合理、底部nav冻结 ✅
+  * 控制台无 error
+- 清理演示数据恢复干净初始态
+
+Stage Summary:
+- Sprint 8 全部交付：AI 陪伴总结（LLM 生成温暖陪伴向总结，嵌入姐姐后台底部，仅姐姐视角）
+- 设计哲学：AI 不是冰冷的数据报告，是"姐姐一直陪着"的温暖话语；system prompt 强制陪伴向，禁用催促/警告/排名词
+- 技术栈：z-ai-web-dev-sdk LLM（后端）+ 前端按钮触发 + 加载态 + 元数据标签
+- 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
+- 至此「学习小岛」全部 9 大功能完成：首页/今日任务/学习记录(错题)/番茄钟/实时聊天/每日留言/心情记录/学习统计/姐姐后台/AI总结

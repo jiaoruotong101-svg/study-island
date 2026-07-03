@@ -9,6 +9,7 @@ import { useUserStore } from "@/store/user-store";
 import { AdminOverview } from "./admin-overview";
 import { AdminTodayDetail } from "./admin-today-detail";
 import { AdminRecentActivity } from "./admin-recent-activity";
+import { AiSummaryCard } from "./ai-summary-card";
 
 /**
  * 姐姐后台（陪伴仪表盘）—— section 容器。
@@ -144,6 +145,9 @@ export function AdminSection() {
         refreshKey={refreshKey}
         onLoaded={handleChildLoaded}
       />
+
+      {/* AI 陪伴总结（仅姐姐视角渲染） */}
+      <AiSummaryCard isSister={role === "sister"} />
 
       {/* 底部陪伴向结语 */}
       <motion.p
