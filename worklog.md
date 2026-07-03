@@ -478,3 +478,34 @@ Stage Summary:
 - 工程校验：ESLint 0 error 0 warning，dev:3000 + chat-service:3003 常驻
 - 关键架构：番茄钟 store/组件职责分离（store 持计时纯逻辑+lastCompletedSeq 信号，组件 effect 触发 POST+回调）；任务与番茄钟通过 activeTaskId/onPomodoroComplete 联动
 - 待后续 Sprint：每日留言、心情记录、学习统计、姐姐后台、AI 总结
+
+---
+Task ID: SPRINT-3.1
+Agent: main (Z.ai Code)
+Task: 番茄钟时长可自由设置（默认专注25/短休5/长休15）
+
+Work Log:
+- pomodoro-store 重构：时长从模块常量改为 store 可配置状态（focusMin/shortBreakMin/longBreakMin）+ setDurations/resetDurations actions；用 persist 中间件持久化时长配置（partialize 只存时长，不存计时态）；onRehydrateStorage 校正初始 remainingSec
+  * 默认值常量导出：DEFAULT_FOCUS_MIN=25/DEFAULT_SHORT_BREAK_MIN=5/DEFAULT_LONG_BREAK_MIN=15，LONG_BREAK_EVERY=4 保持不变
+  * 范围校验：专注1-120、短休1-60、长休1-60，clamp 兜底
+  * setDurations 逻辑：idle 时立即同步当前段 remainingSec；running/paused 时不影响当前段，下一段自然生效
+- 新建 src/components/pomodoro/pomodoro-settings.tsx：齿轮按钮 + Dialog，三个数字输入 + 恢复默认 + 保存
+  * 用 key={open} 重挂载表单避免 effect 内 setState（lint 规则）
+  * 校验：非法值显示错误、Dialog 不关闭；长休<短休提示
+- pomodoro-timer.tsx 改造：移除对旧 FOCUS_MIN/SHORT_BREAK_MIN/LONG_BREAK_MIN 常量的导入，改从 store 读取 focusMin/shortBreakMin/longBreakMin；LONG_BREAK_SEC 改为 longBreakMin*60 派生；顶部加 PomodoroSettings 齿轮入口；阶段标签文案用动态值
+- Agent Browser 验证：
+  * 默认 25:00 ✅
+  * 改专注30/短休10/长休15 → 保存 → 时间变 30:00、标签"专注 30 分钟" ✅
+  * 开始计时 → 30:00→29:57（按新时长倒数）✅
+  * 跳过到休息 → 10:00 短休、标签"短休 10 分钟" ✅
+  * 刷新 → 时长配置保留(30:00)、计时态重置(idle) ✅
+  * 恢复默认 → 25/5/15 → 25:00 ✅
+  * 输入 200 → "专注时长 1–120 分钟"校验、Dialog 不关闭 ✅
+  * 控制台无 error
+- 清理 localStorage 恢复默认初始态
+
+Stage Summary:
+- 番茄钟时长完全可自定义：专注/短休/长休 分钟数自由调整，localStorage 持久化，默认 25/5/15
+- 设计：idle 改动立即生效；运行中改动不影响当前段（下一段生效），避免计时混乱
+- 配套：校验（范围+长休≥短休）、恢复默认、齿轮入口集成到番茄钟顶部
+- ESLint 0 error，dev:3000 + chat-service:3003 常驻

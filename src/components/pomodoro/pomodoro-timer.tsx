@@ -8,12 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useUserStore } from "@/store/user-store";
 import {
-  FOCUS_MIN,
   LONG_BREAK_EVERY,
-  LONG_BREAK_MIN,
-  SHORT_BREAK_MIN,
   usePomodoroStore,
 } from "@/store/pomodoro-store";
+import { PomodoroSettings } from "@/components/pomodoro/pomodoro-settings";
 import type { CreatorRole } from "@/lib/task-types";
 
 /**
@@ -70,7 +68,7 @@ function fmt(sec: number): string {
 
 /* ---------------------------- 常量 ---------------------------- */
 
-const LONG_BREAK_SEC = LONG_BREAK_MIN * 60;
+/* 长休秒数由 store 的 longBreakMin 决定，不再用模块常量。 */
 
 /* ---------------------------- 组件 ---------------------------- */
 
@@ -99,6 +97,12 @@ export function PomodoroTimer({
   const skip = usePomodoroStore((s) => s.skip);
   const tick = usePomodoroStore((s) => s.tick);
   const setTodayFocusCount = usePomodoroStore((s) => s.setTodayFocusCount);
+
+  /* ----- 时长配置（用户可自定义） ----- */
+  const focusMin = usePomodoroStore((s) => s.focusMin);
+  const shortBreakMin = usePomodoroStore((s) => s.shortBreakMin);
+  const longBreakMin = usePomodoroStore((s) => s.longBreakMin);
+  const longBreakSec = longBreakMin * 60;
 
   /* ----- refs：副作用里读最新值，避免把 props 放进 effect 依赖 ----- */
   const activeTaskRef = useRef(activeTask);
@@ -184,7 +188,7 @@ export function PomodoroTimer({
   /* ---------------------------- 派生 UI 文案 ---------------------------- */
 
   const isLongBreak =
-    phase === "break" && currentPhaseTotalSec === LONG_BREAK_SEC;
+    phase === "break" && currentPhaseTotalSec === longBreakSec;
   // 下一段专注若触发长休（completedFocusCount 已经是本次会话已完成数，
   // 再 +1 即下一次专注完成后的总数）
   const nextFocusTriggersLongBreak =
@@ -235,7 +239,7 @@ export function PomodoroTimer({
         className="space-y-4"
         aria-label="番茄钟"
       >
-        {/* 顶部：图标 + 标题 + 今日番茄计数 */}
+        {/* 顶部：图标 + 标题 + 设置 + 今日番茄计数 */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-leaf-soft/60 text-leaf">
@@ -243,16 +247,19 @@ export function PomodoroTimer({
             </span>
             <h2 className="text-base font-semibold text-foreground">番茄钟</h2>
           </div>
-          <div className="text-sm text-muted-foreground">
-            <span aria-hidden="true">🍅</span> ×{" "}
-            {todayFocusInitialized ? (
-              <span className="font-num text-foreground tabular-nums">
-                {todayFocusCount}
-              </span>
-            ) : (
-              <span className="text-muted-foreground/60">…</span>
-            )}
-            <span className="ml-1 text-xs text-muted-foreground/80">今日</span>
+          <div className="flex items-center gap-1.5">
+            <div className="text-sm text-muted-foreground">
+              <span aria-hidden="true">🍅</span> ×{" "}
+              {todayFocusInitialized ? (
+                <span className="font-num text-foreground tabular-nums">
+                  {todayFocusCount}
+                </span>
+              ) : (
+                <span className="text-muted-foreground/60">…</span>
+              )}
+              <span className="ml-1 text-xs text-muted-foreground/80">今日</span>
+            </div>
+            <PomodoroSettings />
           </div>
         </div>
 
@@ -311,10 +318,10 @@ export function PomodoroTimer({
               </span>
               <span className="mt-1 text-xs text-muted-foreground">
                 {phase === "focus"
-                  ? `专注 ${FOCUS_MIN} 分钟`
+                  ? `专注 ${focusMin} 分钟`
                   : isLongBreak
-                    ? `长休 ${LONG_BREAK_MIN} 分钟`
-                    : `短休 ${SHORT_BREAK_MIN} 分钟`}
+                    ? `长休 ${longBreakMin} 分钟`
+                    : `短休 ${shortBreakMin} 分钟`}
               </span>
             </div>
           </div>
