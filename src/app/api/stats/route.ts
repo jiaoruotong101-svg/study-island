@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
-import { MOOD_OPTIONS, getMoodOption } from "@/lib/mood-types";
+import { MOOD_OPTIONS } from "@/lib/mood-types";
 import type {
   DailyFocusStat,
   MoodStatItem,
@@ -18,16 +18,20 @@ import type {
  * 体现"陪伴而非监督"：只看坚持的轨迹，不做排名/对比/警告。
  *
  * 多对隔离：所有子查询都按当前账号的 pairId 过滤。
+ *
+ * 注意：Supabase REST API 返回的 timestamptz 字段为 ISO 字符串，
+ * 本接口用 ISO 字符串做范围/按日比较（ISO UTC Z 字符串字典序 == 时间序）。
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SUBJECTS = ["数学", "语文", "英语", "物理", "化学", "生物", "历史", "地理", "政治", "其他"];
 
-function dateStr(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
+function dateStr(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${m}-${day}`;
 }
 
 /** 近 N 天的日期数组（含今天，按 asc） */
@@ -61,31 +65,57 @@ export async function GET(_req: NextRequest) {
   start.setHours(0, 0, 0, 0);
   const end = new Date();
   end.setHours(23, 59, 59, 999);
+  const startISO = start.toISOString();
+  const endISO = end.toISOString();
 
   // 并行查询：累计 + 近7天（全部按 pairId 过滤）
+  const supabase = getSupabase();
   const [
-    allFocusSessions,
-    allMistakes,
-    weeklyFocus,
-    weeklyTasks,
-    weeklyMistakes,
-    weeklyMoods,
+    allFocusRes,
+    allMistakesRes,
+    weeklyFocusRes,
+    weeklyTasksRes,
+    weeklyMistakesRes,
+    weeklyMoodsRes,
   ] = await Promise.all([
-    db.focusSession.findMany({ where: { pairId, type: "focus" } }),
-    db.mistakeRecord.findMany({ where: { pairId } }),
-    db.focusSession.findMany({
-      where: { pairId, type: "focus", completedAt: { gte: start, lte: end } },
-    }),
-    db.task.findMany({
-      where: { pairId, taskDate: { in: days.map(dateStr) } },
-    }),
-    db.mistakeRecord.findMany({
-      where: { pairId, createdAt: { gte: start, lte: end } },
-    }),
-    db.moodEntry.findMany({
-      where: { pairId, createdAt: { gte: start, lte: end } },
-    }),
+    supabase
+      .from("FocusSession")
+      .select("*")
+      .eq("pairId", pairId)
+      .eq("type", "focus"),
+    supabase.from("MistakeRecord").select("*").eq("pairId", pairId),
+    supabase
+      .from("FocusSession")
+      .select("*")
+      .eq("pairId", pairId)
+      .eq("type", "focus")
+      .gte("completedAt", startISO)
+      .lte("completedAt", endISO),
+    supabase
+      .from("Task")
+      .select("*")
+      .eq("pairId", pairId)
+      .in("taskDate", days.map(dateStr)),
+    supabase
+      .from("MistakeRecord")
+      .select("*")
+      .eq("pairId", pairId)
+      .gte("createdAt", startISO)
+      .lte("createdAt", endISO),
+    supabase
+      .from("MoodEntry")
+      .select("*")
+      .eq("pairId", pairId)
+      .gte("createdAt", startISO)
+      .lte("createdAt", endISO),
   ]);
+
+  const allFocusSessions = allFocusRes.data ?? [];
+  const allMistakes = allMistakesRes.data ?? [];
+  const weeklyFocus = weeklyFocusRes.data ?? [];
+  const weeklyTasks = weeklyTasksRes.data ?? [];
+  const weeklyMistakes = weeklyMistakesRes.data ?? [];
+  const weeklyMoods = weeklyMoodsRes.data ?? [];
 
   // 累计
   const totalFocusMinutes = allFocusSessions.reduce(
@@ -100,15 +130,17 @@ export async function GET(_req: NextRequest) {
   );
   const activeDays = activeDaysSet.size;
 
-  // 近7天每日专注
+  // 近7天每日专注 —— 用 ISO 字符串做比较（UTC Z 字典序 == 时间序）
   const dailyFocus: DailyFocusStat[] = days.map((d) => {
     const ds = dateStr(d);
     const dayStart = new Date(d);
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(d);
     dayEnd.setHours(23, 59, 59, 999);
+    const dayStartISO = dayStart.toISOString();
+    const dayEndISO = dayEnd.toISOString();
     const sessions = weeklyFocus.filter(
-      (s) => s.completedAt >= dayStart && s.completedAt <= dayEnd,
+      (s) => s.completedAt >= dayStartISO && s.completedAt <= dayEndISO,
     );
     const focusMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
     const weekday = WEEKDAY_LABELS[d.getDay()];
@@ -169,6 +201,3 @@ export async function GET(_req: NextRequest) {
 
   return NextResponse.json(data);
 }
-
-// 标注 getMoodOption 已使用（避免某些 lint 误报 unused）
-void getMoodOption;

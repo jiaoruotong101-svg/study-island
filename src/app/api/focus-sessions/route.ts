@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 import type { CreatorRole } from "@/lib/task-types";
 
@@ -41,18 +42,28 @@ export async function GET(req: NextRequest) {
   const role = req.nextUrl.searchParams.get("role");
 
   // 按日期过滤：completedAt 当天
-  const start = new Date(`${date}T00:00:00`);
-  const end = new Date(`${date}T23:59:59.999`);
+  const start = new Date(`${date}T00:00:00`).toISOString();
+  const end = new Date(`${date}T23:59:59.999`).toISOString();
 
-  const sessions = await db.focusSession.findMany({
-    where: {
-      pairId,
-      completedAt: { gte: start, lte: end },
-      ...(role && isValidRole(role) ? { role } : {}),
-    },
-    orderBy: { completedAt: "desc" },
-  });
-  return NextResponse.json({ sessions });
+  const supabase = getSupabase();
+  let query = supabase
+    .from("FocusSession")
+    .select("*")
+    .eq("pairId", pairId)
+    .gte("completedAt", start)
+    .lte("completedAt", end)
+    .order("completedAt", { ascending: false });
+  if (role && isValidRole(role)) {
+    query = query.eq("role", role);
+  }
+  const { data: sessions, error } = await query;
+  if (error) {
+    return NextResponse.json(
+      { ok: false, error: "暂时没能读到专注记录，稍等再试" },
+      { status: 500 },
+    );
+  }
+  return NextResponse.json({ sessions: sessions ?? [] });
 }
 
 export async function POST(req: NextRequest) {
@@ -102,8 +113,25 @@ export async function POST(req: NextRequest) {
       : 25;
   const tid = typeof taskId === "string" && taskId.length > 0 ? taskId : null;
 
-  const session = await db.focusSession.create({
-    data: { role, taskId: tid, durationMinutes: dur, type, pairId },
-  });
+  const supabase = getSupabase();
+  const { data: session, error } = await supabase
+    .from("FocusSession")
+    .insert({
+      id: randomUUID(),
+      role,
+      taskId: tid,
+      durationMinutes: dur,
+      type,
+      pairId,
+      completedAt: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error || !session) {
+    return NextResponse.json(
+      { ok: false, error: "没能记下来，再试一次看看" },
+      { status: 500 },
+    );
+  }
   return NextResponse.json({ ok: true, session }, { status: 201 });
 }

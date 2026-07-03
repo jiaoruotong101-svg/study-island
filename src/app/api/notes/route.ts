@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 import type { CreatorRole } from "@/lib/note-types";
 
@@ -36,11 +37,20 @@ export async function GET(req: NextRequest) {
   const pairId = acc.pairId;
 
   const date = req.nextUrl.searchParams.get("date") ?? todayStr();
-  const notes = await db.dailyNote.findMany({
-    where: { pairId, noteDate: date },
-    orderBy: { createdAt: "asc" },
-  });
-  return NextResponse.json({ notes, date });
+  const supabase = getSupabase();
+  const { data: notes, error } = await supabase
+    .from("DailyNote")
+    .select("*")
+    .eq("pairId", pairId)
+    .eq("noteDate", date)
+    .order("createdAt", { ascending: true });
+  if (error) {
+    return NextResponse.json(
+      { ok: false, error: "暂时没能读到留言，稍等再试" },
+      { status: 500 },
+    );
+  }
+  return NextResponse.json({ notes: notes ?? [], date });
 }
 
 export async function POST(req: NextRequest) {
@@ -91,8 +101,24 @@ export async function POST(req: NextRequest) {
       ? noteDate
       : todayStr();
 
-  const note = await db.dailyNote.create({
-    data: { authorRole, content: content.trim(), noteDate: date, pairId },
-  });
+  const supabase = getSupabase();
+  const { data: note, error } = await supabase
+    .from("DailyNote")
+    .insert({
+      id: randomUUID(),
+      authorRole,
+      content: content.trim(),
+      noteDate: date,
+      pairId,
+      createdAt: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error || !note) {
+    return NextResponse.json(
+      { ok: false, error: "没能记下来，再试一次看看" },
+      { status: 500 },
+    );
+  }
   return NextResponse.json({ ok: true, note }, { status: 201 });
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 
 /**
@@ -19,23 +19,35 @@ export async function GET() {
     return NextResponse.json({ account: null });
   }
 
-  const pair = await db.pair.findUnique({ where: { id: acc.pairId } });
+  const supabase = getSupabase();
+  const { data: pair } = await supabase
+    .from("Pair")
+    .select("*")
+    .eq("id", acc.pairId)
+    .maybeSingle();
 
   // 找配对的另一端账号
-  const partner = await db.account.findFirst({
-    where: {
-      pairId: acc.pairId,
-      role: acc.role === "sister" ? "younger" : "sister",
-    },
-    select: { id: true, displayName: true, role: true, username: true },
-  });
+  const partnerRole = acc.role === "sister" ? "younger" : "sister";
+  const { data: partner } = await supabase
+    .from("Account")
+    .select("id, displayName, role, username")
+    .eq("pairId", acc.pairId)
+    .eq("role", partnerRole)
+    .maybeSingle();
 
   return NextResponse.json({
     account: acc,
     pair: pair
       ? {
           code: pair.code,
-          partner,
+          partner: partner
+            ? {
+                id: partner.id,
+                displayName: partner.displayName,
+                role: partner.role,
+                username: partner.username,
+              }
+            : null,
         }
       : null,
   });

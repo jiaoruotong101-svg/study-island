@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 
 /**
@@ -8,7 +9,7 @@ import { getAccountFromRequest } from "@/lib/auth";
  * 多对隔离：每对 pair 一条留言，按 pairId @unique 唯一。
  * - GET：取当前配对的留言；无则返回 null（前端回退到默认语录库）
  * - PUT：upsert 更新，作者视角由请求体 authorRole 决定
- *   where: { pairId }，create/update 均带 pairId
+ *   onConflict: "pairId"
  *
  * 实时同步由 chat-service socket 广播 quote:updated 事件，
  * 本接口只负责持久化。
@@ -30,7 +31,12 @@ export async function GET() {
   }
   const pairId = acc.pairId;
 
-  const row = await db.homeQuote.findUnique({ where: { pairId } });
+  const supabase = getSupabase();
+  const { data: row } = await supabase
+    .from("HomeQuote")
+    .select("*")
+    .eq("pairId", pairId)
+    .maybeSingle();
   return NextResponse.json({ quote: row });
 }
 
@@ -79,10 +85,26 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  const quote = await db.homeQuote.upsert({
-    where: { pairId },
-    update: { content: content.trim(), authorRole },
-    create: { pairId, content: content.trim(), authorRole },
-  });
+  const supabase = getSupabase();
+  const { data: quote, error } = await supabase
+    .from("HomeQuote")
+    .upsert(
+      {
+        id: randomUUID(),
+        pairId,
+        content: content.trim(),
+        authorRole,
+        updatedAt: new Date().toISOString(),
+      },
+      { onConflict: "pairId" },
+    )
+    .select()
+    .single();
+  if (error || !quote) {
+    return NextResponse.json(
+      { ok: false, error: "没能保存，再试一次看看" },
+      { status: 500 },
+    );
+  }
   return NextResponse.json({ ok: true, quote });
 }

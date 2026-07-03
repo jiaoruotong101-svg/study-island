@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 import { MOOD_OPTIONS } from "@/lib/mood-types";
 import type { CreatorRole } from "@/lib/mood-types";
@@ -43,18 +44,28 @@ export async function GET(req: NextRequest) {
 
   const date = req.nextUrl.searchParams.get("date") ?? todayStr();
   const role = req.nextUrl.searchParams.get("role");
-  const start = new Date(`${date}T00:00:00`);
-  const end = new Date(`${date}T23:59:59.999`);
+  const start = new Date(`${date}T00:00:00`).toISOString();
+  const end = new Date(`${date}T23:59:59.999`).toISOString();
 
-  const entries = await db.moodEntry.findMany({
-    where: {
-      pairId,
-      createdAt: { gte: start, lte: end },
-      ...(role && isValidRole(role) ? { role } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  return NextResponse.json({ entries });
+  const supabase = getSupabase();
+  let query = supabase
+    .from("MoodEntry")
+    .select("*")
+    .eq("pairId", pairId)
+    .gte("createdAt", start)
+    .lte("createdAt", end)
+    .order("createdAt", { ascending: false });
+  if (role && isValidRole(role)) {
+    query = query.eq("role", role);
+  }
+  const { data: entries, error } = await query;
+  if (error) {
+    return NextResponse.json(
+      { ok: false, error: "暂时没能读到心情，稍等再试" },
+      { status: 500 },
+    );
+  }
+  return NextResponse.json({ entries: entries ?? [] });
 }
 
 export async function POST(req: NextRequest) {
@@ -99,8 +110,24 @@ export async function POST(req: NextRequest) {
       ? note.trim().slice(0, 200)
       : null;
 
-  const entry = await db.moodEntry.create({
-    data: { role, mood, note: safeNote, pairId },
-  });
+  const supabase = getSupabase();
+  const { data: entry, error } = await supabase
+    .from("MoodEntry")
+    .insert({
+      id: randomUUID(),
+      role,
+      mood,
+      note: safeNote,
+      pairId,
+      createdAt: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error || !entry) {
+    return NextResponse.json(
+      { ok: false, error: "没能记下来，再试一次看看" },
+      { status: 500 },
+    );
+  }
   return NextResponse.json({ ok: true, entry }, { status: 201 });
 }

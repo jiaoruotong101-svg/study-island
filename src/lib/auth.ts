@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
-import { db } from "@/lib/db";
+import { getSupabase } from "@/lib/supabase";
 
 /**
  * 账号与 session 工具。
@@ -85,8 +85,13 @@ export async function getAccountFromRequest(): Promise<SessionAccount | null> {
     if (!signed) return null;
     const accountId = await verify(signed);
     if (!accountId) return null;
-    const acc = await db.account.findUnique({ where: { id: accountId } });
-    if (!acc) return null;
+    const supabase = getSupabase();
+    const { data: acc, error } = await supabase
+      .from("Account")
+      .select("*")
+      .eq("id", accountId)
+      .maybeSingle();
+    if (error || !acc) return null;
     return {
       id: acc.id,
       username: acc.username,

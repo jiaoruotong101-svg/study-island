@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 import type { HomeGreeting } from "@/lib/greeting-types";
 
@@ -9,7 +10,7 @@ import type { HomeGreeting } from "@/lib/greeting-types";
  * 多对隔离：每对 pair 一条问候，按 pairId @unique 唯一。
  * - GET：取当前配对的问候；无则返回 null（前端回退到角色默认文案）
  * - PUT：upsert 更新（heading + subtitle + authorRole）
- *   where: { pairId }，create/update 均带 pairId
+ *   onConflict: "pairId"
  *
  * 实时同步由 chat-service socket 广播 greeting:updated 事件。
  */
@@ -30,7 +31,12 @@ export async function GET() {
   }
   const pairId = acc.pairId;
 
-  const row = await db.homeGreeting.findUnique({ where: { pairId } });
+  const supabase = getSupabase();
+  const { data: row } = await supabase
+    .from("HomeGreeting")
+    .select("*")
+    .eq("pairId", pairId)
+    .maybeSingle();
   return NextResponse.json({ greeting: row });
 }
 
@@ -80,15 +86,34 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "不知道是谁留的" }, { status: 400 });
   }
 
-  const greeting: HomeGreeting = await db.homeGreeting.upsert({
-    where: { pairId },
-    update: { heading: heading.trim(), subtitle: sub, authorRole },
-    create: {
-      pairId,
-      heading: heading.trim(),
-      subtitle: sub,
-      authorRole,
-    },
-  });
-  return NextResponse.json({ ok: true, greeting });
+  const supabase = getSupabase();
+  const { data: greeting, error } = await supabase
+    .from("HomeGreeting")
+    .upsert(
+      {
+        id: randomUUID(),
+        pairId,
+        heading: heading.trim(),
+        subtitle: sub,
+        authorRole,
+        updatedAt: new Date().toISOString(),
+      },
+      { onConflict: "pairId" },
+    )
+    .select()
+    .single();
+  if (error || !greeting) {
+    return NextResponse.json(
+      { ok: false, error: "没能保存，再试一次看看" },
+      { status: 500 },
+    );
+  }
+  const result: HomeGreeting = {
+    id: greeting.id,
+    heading: greeting.heading,
+    subtitle: greeting.subtitle,
+    authorRole: greeting.authorRole,
+    updatedAt: greeting.updatedAt,
+  };
+  return NextResponse.json({ ok: true, greeting: result });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 import type { CreatorRole } from "@/lib/task-types";
 
@@ -39,11 +40,20 @@ export async function GET(req: NextRequest) {
   const pairId = acc.pairId;
 
   const date = req.nextUrl.searchParams.get("date") ?? todayStr();
-  const tasks = await db.task.findMany({
-    where: { pairId, taskDate: date },
-    orderBy: { createdAt: "asc" },
-  });
-  return NextResponse.json({ tasks });
+  const supabase = getSupabase();
+  const { data: tasks, error } = await supabase
+    .from("Task")
+    .select("*")
+    .eq("pairId", pairId)
+    .eq("taskDate", date)
+    .order("createdAt", { ascending: true });
+  if (error) {
+    return NextResponse.json(
+      { ok: false, error: "暂时没能读到任务，稍等再试" },
+      { status: 500 },
+    );
+  }
+  return NextResponse.json({ tasks: tasks ?? [] });
 }
 
 export async function POST(req: NextRequest) {
@@ -116,8 +126,12 @@ export async function POST(req: NextRequest) {
       ? taskDate
       : todayStr();
 
-  const task = await db.task.create({
-    data: {
+  const supabase = getSupabase();
+  const now = new Date().toISOString();
+  const { data: task, error } = await supabase
+    .from("Task")
+    .insert({
+      id: randomUUID(),
       title: title.trim(),
       subject: subj,
       estimatedPomodoros: est,
@@ -126,7 +140,16 @@ export async function POST(req: NextRequest) {
       createdBy,
       taskDate: date,
       pairId,
-    },
-  });
+      createdAt: now,
+      updatedAt: now,
+    })
+    .select()
+    .single();
+  if (error || !task) {
+    return NextResponse.json(
+      { ok: false, error: "没能记下来，再试一次看看" },
+      { status: 500 },
+    );
+  }
   return NextResponse.json({ ok: true, task }, { status: 201 });
 }

@@ -1255,3 +1255,47 @@ Stage Summary:
 - 密钥 bcrypt 加密，cookie httpOnly+HMAC签名
 - ESLint 0 error，dev:3000 + chat-service:3003 常驻
 - 现有数据已清空，首次使用需注册
+
+---
+Task ID: SUPABASE-MIGRATE
+Agent: full-stack-developer (Prisma → Supabase JS)
+Task: 所有数据访问从 Prisma 迁移到 Supabase JS SDK（@supabase/supabase-js v2.110.0）
+
+Work Log:
+- 背景调整：沙箱封了直连 Postgres 5432，但 Supabase REST API（HTTPS 443）可达；弃用 Prisma 直连，全部改走 PostgREST
+- src/lib/auth.ts：getAccountFromRequest 中 db.account.findUnique → supabase.from("Account").select().eq().maybeSingle()；cookie/session 签名验签、hashPassword/verifyPassword/generatePairCode 全部不变
+- src/app/api/auth/register/route.ts：用户名唯一、Pair 配对码去重、Pair.findUnique → maybeSingle；Account/Pair.create → .insert().select().single()；姐姐注册回填 Pair.createdBy 用 .update().eq()；id 由 randomUUID() 生成
+- src/app/api/auth/login/route.ts：Account.findUnique → maybeSingle；verifyPassword 不变
+- src/app/api/auth/me/route.ts：Pair.findUnique + Account.findFirst → 两个 .maybeSingle()；partner 字段结构保持不变
+- src/app/api/auth/logout/route.ts：不动（无 db 调用）
+- src/app/api/tasks/route.ts：findMany → .select().eq("pairId").eq("taskDate").order()；create → .insert({...}).select().single()
+- src/app/api/tasks/[id]/route.ts：PATCH 用 id+pairId 双过滤 maybeSingle 防越权；incPomodoro 因 PostgREST 不支持 Prisma { increment }，先读 completedPomodoros 再 update 为 +1（2 人/对产品可接受）；DELETE 用 .delete({ count: "exact" }).eq("id").eq("pairId")，按 count===0 判定 404
+- src/app/api/focus-sessions/route.ts：completedAt 用 ISO 字符串 gte/lte；role 过滤链式 .eq()
+- src/app/api/mistakes/route.ts：findMany → .select().eq().order()；toDTO 中 url 字段改用 supabase.storage.from(BUCKET).getPublicUrl(filePath).data.publicUrl，不再 /api/files/<filename>
+- src/app/api/mistakes/[id]/route.ts：删除时同步 supabase.storage.from(BUCKET).remove([filePath])（容错）；db 删除用 .delete().eq("id").eq("pairId")
+- src/app/api/chat/messages/route.ts：findMany take:limit → .select().eq().order().limit()；toDTO 中 url 改用 Storage 公开 URL
+- src/app/api/moods/route.ts：与 focus-sessions 同模式
+- src/app/api/notes/route.ts：findMany + create 改 supabase
+- src/app/api/quote/route.ts：findUnique → .select().eq().maybeSingle()；upsert → .upsert({...}, { onConflict: "pairId" }).select().single()
+- src/app/api/greeting/route.ts：同 quote；返回前用显式 HomeGreeting 类型重组，确保 PascalCase 字段正确
+- src/app/api/today-overview/route.ts：3 个子查询并行 Promise.all，每个 supabase .from().select().eq()...；latestMood 用 .order().limit(1).maybeSingle()
+- src/app/api/stats/route.ts：6 个子查询并行；日期范围用 ISO 字符串；dateStr() 改为接受 Date|string 以适配 Supabase 返回的 ISO 字段；dailyFocus 的按日过滤改用 ISO 字符串字典序比较
+- src/app/api/ai-summary/route.ts：4 个子查询并行；taskDate.in → .in("taskDate", dates)；LLM 调用 z-ai-web-dev-sdk 完全不变
+- src/app/api/uploads/route.ts：从本地 fs.writeFile → supabase.storage.from(BUCKET).upload(filename, buffer, { contentType, upsert: false })；返回 url = supabase.storage.from(BUCKET).getPublicUrl(filename).data.publicUrl
+- 删除 src/app/api/files/[filename]/route.ts（Supabase Storage 直接提供公开 URL，不再需要本地文件代理）
+- src/lib/db.ts 与 prisma/schema.prisma 保留作历史文档，不再被引用
+
+Stage Summary:
+- 产物：18 个文件改造（1 个 auth lib + 16 个 API route + 删除 1 个 files API），全部走 Supabase JS SDK，0 个 Prisma 引用残留
+- 关键决策：
+  1. PostgREST 无原子自增，incPomodoro 用"读后写"（产品 2 人/对可接受并发概率）
+  2. .maybeSingle() 用于可能无行的查询（findUnique/findFirst 语义）；.single() 用于插入后取回的查询（必有 1 行）
+  3. 防越权统一模式：UPDATE/DELETE 都用 .eq("id", id).eq("pairId", pairId) 双过滤；DELETE 用 count===0 判 404
+  4. 日期：写入用 new Date().toISOString()；范围查询用 ISO 字符串 gte/lte；前端用 ISO 字符串不变（前端 formatTime 等已处理）
+  5. id 生成：Prisma @default(cuid()) → 显式 randomUUID()
+  6. 文件 URL：返回 Supabase Storage 公开 URL，前端用 url 字段不变
+- 工程校验：bun run lint → 0 error 0 warning
+- 已知问题：
+  1. 代码逻辑正确，但 Supabase 表还未建（需要主代理执行 supabase-schema.sql），表建好 + SUPABASE_URL/SERVICE_ROLE_KEY/BUCKET 环境变量配置后即可跑通
+  2. Storage bucket 需要主代理在 Supabase Dashboard 设为 public（否则 getPublicUrl 拿到的 URL 仍需签名才能访问）
+  3. .env 已配置 SUPABASE_URL/SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY/SUPABASE_BUCKET

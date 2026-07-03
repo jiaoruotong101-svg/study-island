@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 
 /**
@@ -12,6 +12,10 @@ import { getAccountFromRequest } from "@/lib/auth";
  *
  * 多对隔离：先查记录确认 record.pairId === 当前账号 pairId，
  * 不匹配返回 404，防止越权。
+ *
+ * 注意：Supabase PostgREST 不支持 Prisma 的 { increment: N } 原子自增，
+ * 因此 incPomodoro 先读当前 completedPomodoros 再 update 为 +1。
+ * 产品仅 2 人/对，并发概率极低，可接受。
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,30 +48,41 @@ export async function PATCH(
     );
   }
 
-  const existing = await db.task.findUnique({ where: { id } });
-  if (!existing || existing.pairId !== pairId) {
+  const supabase = getSupabase();
+  // 防越权：按 id + pairId 双过滤
+  const { data: existing, error: findErr } = await supabase
+    .from("Task")
+    .select("*")
+    .eq("id", id)
+    .eq("pairId", pairId)
+    .maybeSingle();
+  if (findErr || !existing) {
     return NextResponse.json({ ok: false, error: "任务不见了" }, { status: 404 });
   }
 
-  const data: {
-    done?: boolean;
-    completedAt?: Date | null;
-    completedPomodoros?: { increment: number };
-  } = {};
+  const update: Record<string, unknown> = { updatedAt: new Date().toISOString() };
 
   if (typeof body.done === "boolean") {
-    data.done = body.done;
-    data.completedAt = body.done ? new Date() : null;
+    update.done = body.done;
+    update.completedAt = body.done ? new Date().toISOString() : null;
   }
   if (body.incPomodoro === true) {
-    data.completedPomodoros = { increment: 1 };
+    update.completedPomodoros = (existing.completedPomodoros ?? 0) + 1;
   }
 
-  if (Object.keys(data).length === 0) {
-    return NextResponse.json({ ok: true, task: existing });
+  const { data: task, error: updateErr } = await supabase
+    .from("Task")
+    .update(update)
+    .eq("id", id)
+    .eq("pairId", pairId)
+    .select()
+    .single();
+  if (updateErr || !task) {
+    return NextResponse.json(
+      { ok: false, error: "没能更新，再试一次看看" },
+      { status: 500 },
+    );
   }
-
-  const task = await db.task.update({ where: { id }, data });
   return NextResponse.json({ ok: true, task });
 }
 
@@ -85,15 +100,21 @@ export async function DELETE(
   const pairId = acc.pairId;
 
   const { id } = await params;
-  try {
-    // 防越权：先确认归属再删
-    const existing = await db.task.findUnique({ where: { id } });
-    if (!existing || existing.pairId !== pairId) {
-      return NextResponse.json({ ok: false, error: "任务已不在了" }, { status: 404 });
-    }
-    await db.task.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch {
+  const supabase = getSupabase();
+  // 防越权：按 id + pairId 双过滤删除
+  const { error, count } = await supabase
+    .from("Task")
+    .delete({ count: "exact" })
+    .eq("id", id)
+    .eq("pairId", pairId);
+  if (error) {
+    return NextResponse.json(
+      { ok: false, error: "任务已不在了" },
+      { status: 404 },
+    );
+  }
+  if (count === 0) {
     return NextResponse.json({ ok: false, error: "任务已不在了" }, { status: 404 });
   }
+  return NextResponse.json({ ok: true });
 }

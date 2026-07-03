@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { getSupabase, SUPABASE_BUCKET } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 
 /**
@@ -10,7 +11,9 @@ import { getAccountFromRequest } from "@/lib/auth";
  *
  * 多对隔离：所有读写都按当前账号的 pairId 过滤。
  *
- * runtime=nodejs：与文件系统无关，但保持与其他错题接口一致以便日后扩展。
+ * 文件 url 直接返回 Supabase Storage 公开 URL：
+ *   https://xxx.supabase.co/storage/v1/object/public/<bucket>/<filename>
+ * 前端用 url 字段不变，不再走 /api/files/<filename>。
  */
 
 export const runtime = "nodejs";
@@ -41,19 +44,23 @@ function toDTO(r: {
   note: string | null;
   subject: string | null;
   createdBy: string;
-  createdAt: Date;
+  createdAt: string;
 }): MistakeRecordDTO {
+  const supabase = getSupabase();
+  const { data } = supabase.storage
+    .from(SUPABASE_BUCKET)
+    .getPublicUrl(r.filePath);
   return {
     id: r.id,
     type: r.type as MistakeType,
     filePath: r.filePath,
-    url: `/api/files/${encodeURIComponent(r.filePath)}`,
+    url: data.publicUrl,
     mimeType: r.mimeType,
     duration: r.duration,
     note: r.note,
     subject: r.subject,
     createdBy: r.createdBy as CreatorRole,
-    createdAt: r.createdAt.toISOString(),
+    createdAt: r.createdAt,
   };
 }
 
@@ -106,11 +113,20 @@ export async function GET() {
   const pairId = acc.pairId;
 
   try {
-    const records = await db.mistakeRecord.findMany({
-      where: { pairId },
-      orderBy: { createdAt: "desc" },
-    });
-    return NextResponse.json(records.map(toDTO));
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("MistakeRecord")
+      .select("*")
+      .eq("pairId", pairId)
+      .order("createdAt", { ascending: false });
+    if (error) {
+      console.error("[mistakes] GET 失败", error);
+      return NextResponse.json(
+        { error: "暂时没能读到错题本，稍后再试" },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json((data ?? []).map(toDTO));
   } catch (err) {
     console.error("[mistakes] GET 失败", err);
     return NextResponse.json(
@@ -171,8 +187,11 @@ export async function POST(req: NextRequest) {
   const subject = toOptionalString(body.subject);
 
   try {
-    const created = await db.mistakeRecord.create({
-      data: {
+    const supabase = getSupabase();
+    const { data: created, error } = await supabase
+      .from("MistakeRecord")
+      .insert({
+        id: randomUUID(),
         type,
         filePath,
         mimeType,
@@ -181,8 +200,17 @@ export async function POST(req: NextRequest) {
         subject,
         createdBy,
         pairId,
-      },
-    });
+        createdAt: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (error || !created) {
+      console.error("[mistakes] POST 失败", error);
+      return NextResponse.json(
+        { error: "没能记下来，再试一次看看" },
+        { status: 500 },
+      );
+    }
     return NextResponse.json(toDTO(created), { status: 201 });
   } catch (err) {
     console.error("[mistakes] POST 失败", err);

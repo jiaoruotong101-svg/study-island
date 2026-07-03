@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { unlink } from "fs/promises";
-import path from "path";
-import { db } from "@/lib/db";
+import { getSupabase, SUPABASE_BUCKET } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 
 /**
  * 错题记录单条 API —— 删除
  *
- * - DELETE /api/mistakes/[id]   先删文件（容错），再删库记录
+ * - DELETE /api/mistakes/[id]   先删 Supabase Storage 文件（容错），再删库记录
  *
  * 多对隔离：先查记录确认 record.pairId === 当前账号 pairId，
  * 不匹配返回 404，防止越权。
  *
- * runtime=nodejs：涉及 fs。
+ * runtime=nodejs：与文件系统无关，但保持与其他错题接口一致以便日后扩展。
  */
 
 export const runtime = "nodejs";
-
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 
 function isSafeFilename(name: string): boolean {
   return (
@@ -46,9 +42,22 @@ export async function DELETE(
     return NextResponse.json({ error: "缺少 id" }, { status: 400 });
   }
 
+  const supabase = getSupabase();
   let record;
   try {
-    record = await db.mistakeRecord.findUnique({ where: { id } });
+    const { data, error } = await supabase
+      .from("MistakeRecord")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      console.error("[mistakes] DELETE 查询失败", error);
+      return NextResponse.json(
+        { error: "暂时没能删掉，稍后再试" },
+        { status: 500 },
+      );
+    }
+    record = data;
   } catch (err) {
     console.error("[mistakes] DELETE 查询失败", err);
     return NextResponse.json(
@@ -62,21 +71,30 @@ export async function DELETE(
     return NextResponse.json({ error: "记录不存在" }, { status: 404 });
   }
 
-  // 删文件 —— 容错：文件可能已被外部移除
+  // 删 Supabase Storage 文件 —— 容错：文件可能已被外部移除
   if (isSafeFilename(record.filePath)) {
-    try {
-      await unlink(path.join(UPLOAD_DIR, record.filePath));
-    } catch (err) {
+    const { error: storeErr } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .remove([record.filePath]);
+    if (storeErr) {
       // 容忍文件不存在；其它错误仅记录日志，不阻塞删除
-      const code = (err as NodeJS.ErrnoException)?.code;
-      if (code !== "ENOENT") {
-        console.error("[mistakes] DELETE 删文件失败", err);
-      }
+      console.error("[mistakes] DELETE 删文件失败", storeErr);
     }
   }
 
   try {
-    await db.mistakeRecord.delete({ where: { id } });
+    const { error: delErr } = await supabase
+      .from("MistakeRecord")
+      .delete()
+      .eq("id", id)
+      .eq("pairId", pairId);
+    if (delErr) {
+      console.error("[mistakes] DELETE 删库记录失败", delErr);
+      return NextResponse.json(
+        { error: "没能删掉，再试一次看看" },
+        { status: 500 },
+      );
+    }
   } catch (err) {
     console.error("[mistakes] DELETE 删库记录失败", err);
     return NextResponse.json(

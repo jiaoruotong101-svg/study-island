@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { randomUUID } from "crypto";
+import { getSupabase, SUPABASE_BUCKET } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 
 /**
@@ -13,6 +14,8 @@ import { getAccountFromRequest } from "@/lib/auth";
  * 与 socket.io 中继的关系：本接口只管"持久化"，
  * 实时分发由 mini-services/chat-service (端口 3003) 负责。
  * 前端流程：POST 本接口 → 拿到完整记录 → socket.emit('chat:send', record)。
+ *
+ * 文件 url 直接返回 Supabase Storage 公开 URL，不再走 /api/files/<filename>。
  */
 
 export const runtime = "nodejs";
@@ -39,8 +42,16 @@ function toDTO(r: {
   content: string | null;
   filePath: string | null;
   duration: number | null;
-  createdAt: Date;
+  createdAt: string;
 }): ChatMessageDTO {
+  let url: string | null = null;
+  if (r.filePath) {
+    const supabase = getSupabase();
+    const { data } = supabase.storage
+      .from(SUPABASE_BUCKET)
+      .getPublicUrl(r.filePath);
+    url = data.publicUrl;
+  }
   return {
     id: r.id,
     senderRole: r.senderRole as SenderRole,
@@ -48,10 +59,8 @@ function toDTO(r: {
     content: r.content,
     filePath: r.filePath,
     duration: r.duration,
-    url: r.filePath
-      ? `/api/files/${encodeURIComponent(r.filePath)}`
-      : null,
-    createdAt: r.createdAt.toISOString(),
+    url,
+    createdAt: r.createdAt,
   };
 }
 
@@ -108,12 +117,21 @@ export async function GET(req: NextRequest) {
 
   const limit = parseLimit(req.nextUrl.searchParams.get("limit"));
   try {
-    const records = await db.chatMessage.findMany({
-      where: { pairId },
-      orderBy: { createdAt: "asc" },
-      take: limit,
-    });
-    return NextResponse.json(records.map(toDTO));
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("ChatMessage")
+      .select("*")
+      .eq("pairId", pairId)
+      .order("createdAt", { ascending: true })
+      .limit(limit);
+    if (error) {
+      console.error("[chat/messages] GET 失败", error);
+      return NextResponse.json(
+        { error: "暂时没能读到聊天记录，稍等一下再试" },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json((data ?? []).map(toDTO));
   } catch (err) {
     console.error("[chat/messages] GET 失败", err);
     return NextResponse.json(
@@ -188,9 +206,28 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const created = await db.chatMessage.create({
-      data: { senderRole, type, content, filePath, duration, pairId },
-    });
+    const supabase = getSupabase();
+    const { data: created, error } = await supabase
+      .from("ChatMessage")
+      .insert({
+        id: randomUUID(),
+        senderRole,
+        type,
+        content,
+        filePath,
+        duration,
+        pairId,
+        createdAt: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (error || !created) {
+      console.error("[chat/messages] POST 失败", error);
+      return NextResponse.json(
+        { error: "消息没能发出去，再试一次看看" },
+        { status: 500 },
+      );
+    }
     return NextResponse.json(toDTO(created), { status: 201 });
   } catch (err) {
     console.error("[chat/messages] POST 失败", err);

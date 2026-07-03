@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 import { getMoodOption } from "@/lib/mood-types";
 import ZAI from "z-ai-web-dev-sdk";
@@ -19,10 +19,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function dateStr(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
+function dateStr(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${m}-${day}`;
 }
 
 function lastNDates(n: number): string[] {
@@ -75,24 +76,42 @@ export async function POST(req: NextRequest) {
   startDate.setHours(0, 0, 0, 0);
   const endDate = new Date();
   endDate.setHours(23, 59, 59, 999);
+  const startISO = startDate.toISOString();
+  const endISO = endDate.toISOString();
 
   // 全部按 pairId 过滤
-  const [focusSessions, tasks, mistakes, moods] = await Promise.all([
-    db.focusSession.findMany({
-      where: {
-        pairId,
-        type: "focus",
-        completedAt: { gte: startDate, lte: endDate },
-      },
-    }),
-    db.task.findMany({ where: { pairId, taskDate: { in: dates } } }),
-    db.mistakeRecord.findMany({
-      where: { pairId, createdAt: { gte: startDate, lte: endDate } },
-    }),
-    db.moodEntry.findMany({
-      where: { pairId, createdAt: { gte: startDate, lte: endDate } },
-    }),
+  const supabase = getSupabase();
+  const [focusRes, tasksRes, mistakesRes, moodsRes] = await Promise.all([
+    supabase
+      .from("FocusSession")
+      .select("*")
+      .eq("pairId", pairId)
+      .eq("type", "focus")
+      .gte("completedAt", startISO)
+      .lte("completedAt", endISO),
+    supabase
+      .from("Task")
+      .select("*")
+      .eq("pairId", pairId)
+      .in("taskDate", dates),
+    supabase
+      .from("MistakeRecord")
+      .select("*")
+      .eq("pairId", pairId)
+      .gte("createdAt", startISO)
+      .lte("createdAt", endISO),
+    supabase
+      .from("MoodEntry")
+      .select("*")
+      .eq("pairId", pairId)
+      .gte("createdAt", startISO)
+      .lte("createdAt", endISO),
   ]);
+
+  const focusSessions = focusRes.data ?? [];
+  const tasks = tasksRes.data ?? [];
+  const mistakes = mistakesRes.data ?? [];
+  const moods = moodsRes.data ?? [];
 
   // 聚合
   const totalFocusMinutes = focusSessions.reduce(

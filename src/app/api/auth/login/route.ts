@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getSupabase } from "@/lib/supabase";
 import { setSessionCookie, verifyPassword } from "@/lib/auth";
 
 /**
@@ -38,8 +38,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const account = await db.account.findUnique({ where: { username } });
-  if (!account) {
+  const supabase = getSupabase();
+  const { data: account, error } = await supabase
+    .from("Account")
+    .select("*")
+    .eq("username", username)
+    .maybeSingle();
+  if (error || !account) {
     return NextResponse.json(
       { ok: false, error: "用户名或密钥不对" },
       { status: 400 },

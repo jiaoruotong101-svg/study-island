@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getSupabase } from "@/lib/supabase";
 import { getAccountFromRequest } from "@/lib/auth";
 import { getMoodOption } from "@/lib/mood-types";
 
@@ -32,26 +32,37 @@ export async function GET(_req: NextRequest) {
   const pairId = acc.pairId;
 
   const date = todayStr();
-  const start = new Date(`${date}T00:00:00`);
-  const end = new Date(`${date}T23:59:59.999`);
+  const start = new Date(`${date}T00:00:00`).toISOString();
+  const end = new Date(`${date}T23:59:59.999`).toISOString();
 
-  const [tasks, focusSessions, latestMood] = await Promise.all([
-    db.task.findMany({ where: { pairId, taskDate: date } }),
-    db.focusSession.findMany({
-      where: {
-        pairId,
-        completedAt: { gte: start, lte: end },
-        type: "focus",
-      },
-    }),
-    db.moodEntry.findFirst({
-      where: {
-        pairId,
-        createdAt: { gte: start, lte: end },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
+  const supabase = getSupabase();
+  const [tasksRes, focusRes, moodRes] = await Promise.all([
+    supabase
+      .from("Task")
+      .select("*")
+      .eq("pairId", pairId)
+      .eq("taskDate", date),
+    supabase
+      .from("FocusSession")
+      .select("durationMinutes")
+      .eq("pairId", pairId)
+      .eq("type", "focus")
+      .gte("completedAt", start)
+      .lte("completedAt", end),
+    supabase
+      .from("MoodEntry")
+      .select("*")
+      .eq("pairId", pairId)
+      .gte("createdAt", start)
+      .lte("createdAt", end)
+      .order("createdAt", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
+
+  const tasks = tasksRes.data ?? [];
+  const focusSessions = focusRes.data ?? [];
+  const latestMood = moodRes.data;
 
   const completedTaskCount = tasks.filter((t) => t.done).length;
   const pendingTaskCount = tasks.length - completedTaskCount;
