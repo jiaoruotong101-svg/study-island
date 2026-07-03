@@ -1360,3 +1360,26 @@ Stage Summary:
 - 代码包下载链接：https://tmpfiles.org/w9wHjGr3Uxau/study-island.zip（临时1小时）
 - 推荐永久方案：推到 GitHub（需用户自行操作或提供 PAT）
 - 部署：主应用 Vercel + chat-service Railway，详见 README.md
+
+---
+Task ID: GITHUB-PUSH (推送到 GitHub)
+Agent: main (Z.ai Code)
+Task: 把代码推送到用户 GitHub 仓库
+
+Work Log:
+- 用户提供 GitHub Personal Access Token（ghp_y0Gl...）
+- 补全 .gitignore：新增忽略 .env / dev.log / server.log / db/*.db / uploads/* / study-island.zip / agent-ctx/ / .zscripts/ / tool-results/
+- 发现 .env 和 study-island.zip 已被 git 追踪，用 git rm --cached 移除（本地文件保留）
+- 设置 git 提交身份：jiaoruotong101-svg + noreply email
+- 配置 remote：https://<token>@github.com/jiaoruotong101-svg/study-island.git
+- 提交 gitignore 改动
+- 安全扫描：确认推送文件列表无敏感内容（无密码/token/密钥）
+- git push -u origin main 成功，187 个文件推送
+- 验证仓库为 Private（公开 API 返回 403 需认证）
+- 清理 remote URL 中的 token（改回不含 token 的 URL）
+
+Stage Summary:
+- 代码已推送到 https://github.com/jiaoruotong101-svg/study-island（Private）
+- 187 个文件，不含 .env（敏感凭据未泄露）
+- 含 .env.example 脱敏模板 + README.md 完整说明 + supabase-schema.sql 建表脚本
+- token 已从 git config 清除，建议用户去 GitHub 删除该 token
