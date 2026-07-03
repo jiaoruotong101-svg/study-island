@@ -7,6 +7,7 @@ import { MoodSection } from "@/components/mood/mood-section";
 import { NoteSection } from "@/components/notes/note-section";
 import { StatsSection } from "@/components/stats/stats-section";
 import { AdminSection } from "@/components/admin/admin-section";
+import { MeSection } from "@/components/me/me-section";
 import { HomeSection } from "@/components/home/home-section";
 import { useNavStore } from "@/store/nav-store";
 
@@ -33,6 +34,9 @@ export default function HomePage() {
   }
   if (activeTab === "admin") {
     return <AdminSection />;
+  }
+  if (activeTab === "me") {
+    return <MeSection />;
   }
   return <HomeSection />;
 }

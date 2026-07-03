@@ -1109,3 +1109,36 @@ Stage Summary:
 - 技术栈：z-ai-web-dev-sdk LLM（后端）+ 前端按钮触发 + 加载态 + 元数据标签
 - 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻
 - 至此「学习小岛」全部 9 大功能完成：首页/今日任务/学习记录(错题)/番茄钟/实时聊天/每日留言/心情记录/学习统计/姐姐后台/AI总结
+
+---
+Task ID: SPRINT-9 (个人板块补完)
+Agent: main (Z.ai Code)
+Task: 「我的」个人板块（底部 nav 第5 tab，此前标"即将"）
+
+Work Log:
+- nav-store: NavTab 加 "me"
+- app-footer: 第5 tab 从 disabled("即将")改为可用；移除 available 字段，5 tab 全部可点击切换
+- page.tsx: activeTab==="me" 渲染 MeSection
+- 新建 src/components/me/me-section.tsx（单文件，~330行）：
+  * 身份卡：当前身份(姐姐🌷/妹妹🌱) + 角色标签 + 陪伴向描述 + "切到X视角"按钮
+  * 我的概况：4张数字卡（累计专注/完成番茄/坚持天数/错题积累），复用 /api/stats，.font-num 数字，加载 Skeleton
+  * 外观设置：浅色/深色/跟随系统 三选一（next-themes），useSyncExternalStore 做 mounted 检测避免 hydration mismatch + lint 报错
+  * 小岛设置：番茄钟时长快捷入口（点击 setTab("tasks") 跳转任务 section）
+  * 关于小岛：产品理念"不是监督而是陪伴"+ 版本 1.0.0
+- Agent Browser 端到端验证：
+  * 底部 nav 5 tab 全部可用（无 disabled）✅
+  * 点击"我的"进入板块，渲染：身份卡+概况+外观+小岛设置+关于 ✅
+  * 概况数字正确（空数据0/0/0/0）✅
+  * 主题切换：点深色→html.dark 生效；点浅色→恢复 ✅
+  * 身份切换：妹妹→姐姐，身份卡+副标题变化 ✅
+  * 小岛设置入口点击→跳转任务 section ✅
+  * VLM 确认视觉：身份卡/4数字卡/外观/小岛设置/关于/玻璃质感/排版 无问题 ✅
+  * 移动端390 + 桌面端1280 响应式 ✅
+  * 控制台无 error
+- ESLint 0 error
+
+Stage Summary:
+- 「我的」个人板块交付：身份卡(切换)+我的概况(复用stats)+外观设置(主题切换)+小岛设置入口+关于小岛
+- 至此底部 nav 5 tab 全部可用，无"即将"占位
+- 设计：自己看自己（区别于姐姐后台看妹妹），陪伴向文案
+- 工程校验：ESLint 0 error，dev:3000 + chat-service:3003 常驻

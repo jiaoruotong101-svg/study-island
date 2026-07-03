@@ -16,7 +16,8 @@ export type NavTab =
   | "mood"
   | "notes"
   | "stats"
-  | "admin";
+  | "admin"
+  | "me";
 
 interface NavState {
   activeTab: NavTab;
