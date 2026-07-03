@@ -5,11 +5,14 @@ import { cn } from "@/lib/utils";
 import { useNavStore, type NavTab } from "@/store/nav-store";
 
 /**
- * 底部粘性导航。
+ * 底部导航栏（冻结常驻）。
  *
  * 受"只能使用 / 单路由"约束，点击切换客户端 section 而非路由。
  * - 首页 / 错题 / 聊天：可用
  * - 番茄 / 我的：标注"即将"，后续 Sprint 接入
+ *
+ * 布局：fixed bottom-0 始终浮在视口底部，无论内容多长都能看到可切换。
+ * 配套：AppShell 的 main 已加 padding-bottom 留出空间，避免内容被遮挡。
  */
 
 interface NavItem {
@@ -34,8 +37,8 @@ export function AppFooter() {
   return (
     <footer
       className="
-        mt-auto w-full border-t border-white/40
-        glass-strong
+        fixed bottom-0 left-0 z-40 w-full
+        border-t border-white/40 glass-strong
         pb-[env(safe-area-inset-bottom)]
       "
     >

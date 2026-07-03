@@ -280,3 +280,26 @@ Stage Summary:
 - 复用现有 chat-service socket 通道，零新增服务
 - 设计：编辑器 placeholder 随当前身份切换文案（姐姐视角"给妹妹留句鼓励"、妹妹视角"想对姐姐说什么"），体现双向陪伴
 - ESLint 0 error，dev:3000 + chat-service:3003 常驻
+
+---
+Task ID: SPRINT-2.2
+Agent: main (Z.ai Code)
+Task: 底部导航栏冻结常驻，始终可见可切换
+
+Work Log:
+- AppFooter：footer 从 mt-auto（文档流末尾）改为 fixed bottom-0 left-0 w-full z-40，始终浮在视口底部
+- AppShell：main 加 pb-[calc(5.5rem+env(safe-area-inset-bottom))] 留出 footer 空间，避免内容被遮挡
+- Agent Browser 多场景验证（经 Caddy:81）：
+  * 移动端 390×700：footer fixed bottom=700=视口高 ✅；滚到最底 main 内容不被遮挡（gap 94px）✅
+  * 滚动中途 footer 纹丝不动贴底 ✅；滚动状态下点击 footer tab 可切换 section ✅
+  * 错题板块：滚到底空态文案不被遮挡 ✅
+  * 聊天板块：composer（输入框/发送/录音）在 footer 上方 209px 不遮挡 ✅
+  * 桌面端 1280×800：footer fixed bottom=800=视口高 ✅；滚动时常驻 ✅
+  * VLM 确认：导航栏冻结视口底、玻璃质感、内容未遮挡、配色合规
+  * 控制台无 error
+- ESLint 0 error，dev:3000 + chat-service:3003 常驻
+
+Stage Summary:
+- 底部导航栏实现真正冻结（fixed），无论首页/错题/聊天、无论内容多长、无论滚动位置，始终可见可切换
+- 通过 main padding-bottom 预留空间，确保任何 section 的底部内容（含聊天输入框）不被遮挡
+- 兼容移动端 safe-area-inset-bottom（iOS 底部安全区）
