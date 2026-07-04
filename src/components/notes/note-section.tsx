@@ -54,8 +54,8 @@ export function NoteSection() {
 
   const subtitle =
     role === "sister"
-      ? "给妹妹留句话，慢慢说，不急。"
-      : "给姐姐留张小纸条，她打开就能看到。";
+      ? "给妹妹留句话吧~"
+      : "给姐姐留张小纸条~";
 
   return (
     <section aria-label="每日留言" className="space-y-5 sm:space-y-6">
