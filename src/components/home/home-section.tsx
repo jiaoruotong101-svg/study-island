@@ -20,8 +20,8 @@ import type { HomeGreeting } from "@/lib/greeting-types";
  */
 const DEFAULT_GREETING: Record<"sister" | "younger", { heading: string; subtitle: string }> = {
   sister: {
-    heading: "姐姐，来看看妹妹今天",
-    subtitle: "不用催促，慢慢看就好 —— 她今天也在努力着。",
+    heading: "恭迎大帝",
+    subtitle: "老妹赶紧往前跑啊！！！",
   },
   younger: {
     heading: "欢迎回到小岛",
