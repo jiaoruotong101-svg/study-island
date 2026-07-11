@@ -103,7 +103,7 @@ export function MeSection() {
         </h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
           {isSister
-            ? "姐姐的小角落，慢慢看看自己。"
+            ? "姐姐的小角落"
             : "妹妹的小角落，今天也辛苦啦。"}
         </p>
       </header>
@@ -487,8 +487,7 @@ function AboutCard() {
           学习小岛
         </p>
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          一个只属于姐姐和妹妹的小岛。不是监督，而是陪伴 ——
-          姐姐一直陪着妹妹高三。慢慢来，每一分钟都算数。
+          一个属于姐姐和妹妹的小岛。不是监督，而是陪伴。慢慢来，每一分钟都算数。
         </p>
       </div>
       <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">

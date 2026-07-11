@@ -79,8 +79,8 @@ export function MistakeSection() {
 
   const headerSubtitle =
     role === "sister"
-      ? "看看妹妹又攒下了哪些题，慢慢陪她理。"
-      : "再错一次也没关系，记下来就赚到了。";
+      ? "看看妹妹又攒下了哪些题吧~"
+      : "再错一次也没关系，记下来就是赚到了！";
 
   return (
     <section aria-label="错题记录" className="space-y-6">
@@ -169,7 +169,7 @@ export function MistakeSection() {
 function EmptyState({ role }: { role: CreatorRole }) {
   const text =
     role === "sister"
-      ? "妹妹还没记下错题。也许今天她做对了很多。"
+      ? "妹妹还没记下错题。也许今天她做对了很多？"
       : "这里还空着，遇到不会的题就拍下来吧。";
   return (
     <GlassCard pad="lg" className="bg-cream/30">

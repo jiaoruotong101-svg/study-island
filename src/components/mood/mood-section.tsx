@@ -43,8 +43,8 @@ export function MoodSection() {
 
   const subtitle =
     role === "sister"
-      ? "看看妹妹今天的心情，不强求，她愿意说就说。"
-      : "今天感觉怎么样？记下来，慢慢懂自己。";
+      ? "看看妹妹今天的心情"
+      : "今天感觉怎么样？记下来吧~";
 
   return (
     <section aria-label="心情记录" className="space-y-6">

@@ -44,14 +44,14 @@ export function TodayOverview() {
       icon: ListChecks,
       label: "今日已完成",
       value: `${data.completedTaskCount} / ${data.completedTaskCount + data.pendingTaskCount}`,
-      hint: role === "sister" ? "妹妹今天很稳" : "已经完成不少啦",
+      hint: role === "sister" ? "老妹今天很稳" : "已经完成不少啦~",
     },
     {
       key: "pending",
       icon: ListChecks,
       label: "待完成",
       value: `${data.pendingTaskCount}`,
-      hint: role === "sister" ? "慢慢来就好" : "一件一件来，不急",
+      hint: role === "sister" ? "慢慢来~" : "一件一件来，不急",
     },
     {
       key: "focus",
@@ -68,7 +68,7 @@ export function TodayOverview() {
       hint: data.mood
         ? role === "sister"
           ? "妹妹今天的状态"
-          : "记下来，慢慢懂自己"
+          : "记下来吧~"
         : "去记一笔吧",
     },
   ];

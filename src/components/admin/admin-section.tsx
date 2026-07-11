@@ -30,7 +30,6 @@ import { AiSummaryCard } from "./ai-summary-card";
  *   - AdminOverview：4 张今日状态概览卡
  *   - AdminTodayDetail：今日任务 | 今日心情（双列）
  *   - AdminRecentActivity：最近错题 | 今日留言（双列）
- *   - 底部结语："她今天也在努力着。"
  *
  * 状态：
  *   - refreshKey：刷新按钮 → +1 → 3 个子组件并行重拉
@@ -113,7 +112,7 @@ export function AdminSection() {
             姐姐的后台
           </h2>
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-            看看妹妹今天的状态，不强求，她愿意说就说。
+            看看妹妹今天的状态~
           </p>
         </div>
         <Button
