@@ -121,11 +121,7 @@ export async function POST(req: NextRequest) {
     });
     if (pairErr) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "注册失败了，再试一次看看",
-          debug: "Pair insert: " + (pairErr.message || "unknown"),
-        },
+        { ok: false, error: "注册失败了，再试一次看看" },
         { status: 500 },
       );
     }
@@ -185,11 +181,7 @@ export async function POST(req: NextRequest) {
     .single();
   if (accErr || !account) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: "注册失败了，再试一次看看",
-        debug: accErr ? accErr.message : "no data returned",
-      },
+      { ok: false, error: "注册失败了，再试一次看看" },
       { status: 500 },
     );
   }
